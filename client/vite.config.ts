@@ -26,6 +26,17 @@ export default defineConfig({
   },
   build: {
     outDir: '../dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['framer-motion', 'lucide-react', 'clsx', 'tailwind-merge'],
+          'vendor-charts': ['recharts', 'chart.js'],
+          'vendor-maps': ['leaflet', 'react-leaflet'],
+          'vendor-utils': ['@supabase/supabase-js']
+        }
+      }
+    }
   }
 })
