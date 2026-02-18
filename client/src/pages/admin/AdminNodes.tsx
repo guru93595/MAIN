@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Server, MapPin, Radio, Activity, Database, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { createNode } from '../../services/devices';
-import { NodeCategory, AnalyticsType } from '../../types/database';
+import type { NodeCategory, AnalyticsType } from '../../types/database';
 
 const AdminNodes = () => {
     const [loading, setLoading] = useState(false);
