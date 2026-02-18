@@ -6,7 +6,17 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:8080", "http://localhost:5173", "https://evara-dashboard.onrender.com"]
+    @property
+    def cors_origins(self) -> list[str]:
+        # Default origins
+        defaults = ["http://localhost:8080", "http://localhost:5173", "https://evara-dashboard.onrender.com"]
+        # Allow comma separated string from env
+        env_origins = self.BACKEND_CORS_ORIGINS
+        if isinstance(env_origins, str):
+            return defaults + [x.strip() for x in env_origins.split(",") if x.strip()]
+        return defaults + (env_origins or [])
+
+    BACKEND_CORS_ORIGINS: list[str] | str = []
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"

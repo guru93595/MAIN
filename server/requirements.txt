@@ -3,6 +3,8 @@ uvicorn[standard]
 sqlalchemy
 asyncpg
 pydantic
+pydantic-settings
+email-validator
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
@@ -11,8 +13,6 @@ httpx
 pandas
 scikit-learn
 gunicorn
-pandas
-scikit-learn
-httpx
+aiosqlite
 pytest
 pytest-asyncio

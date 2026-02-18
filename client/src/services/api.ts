@@ -1,8 +1,11 @@
 import axios, { type InternalAxiosRequestConfig, type AxiosResponse, type AxiosError } from 'axios';
 
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+console.log('Backend API Base URL:', baseURL);
+
 // Create Axios Instance
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+    baseURL,
     headers: {
         'Content-Type': 'application/json',
     },

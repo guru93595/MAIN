@@ -8,18 +8,15 @@ from app.db.session import create_tables
 from app.core.background import start_background_tasks
 from app.services.seeder import seed_db
 
+from app.core.config import get_settings
+
+settings = get_settings()
 app = FastAPI(title="EvaraTech Backend", version="1.0.0")
 
 # Configure CORS to allow requests from the React Frontend
-origins = [
-    "http://localhost:8080",
-    "http://localhost:5173",
-    "https://evara-dashboard.onrender.com"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
