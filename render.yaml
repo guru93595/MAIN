@@ -6,6 +6,8 @@ services:
     root: server
     plan: free
     region: singapore
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
