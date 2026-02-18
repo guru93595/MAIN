@@ -1,73 +1,36 @@
-# React + TypeScript + Vite
+# EvaraTech Dashboard (Monorepo)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A high-performance water management dashboard with a React Frontend and Python (FastAPI) Backend.
 
-Currently, two official plugins are available:
+## Structure
+- **client/**: React + Vite + Tailwind CSS (Frontend)
+- **server/**: Python + FastAPI + SQLAlchemy + Pandas (Backend)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Quick Start
+### Prerequisites
+- Node.js & npm
+- Python 3.10+ & pip
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Setup
+Run this command from the root to install dependencies for both Client and Server:
+```bash
+npm run setup
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Running the App
+Start both servers concurrently:
+```bash
+npm start
 ```
+- **Frontend**: http://localhost:8080
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+## Features
+- **Intelligent Analytics**: Linear Regression for tank emptying prediction.
+- **Real-Time**: WebSocket support for live updates.
+- **Advanced Search**: In-Memory Inverted Index for O(1) location lookup.
+- **Secure**: JWT Authentication and RBAC.
+
+## Deployment
+See `deployment.md` for Render deployment instructions.

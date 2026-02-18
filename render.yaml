@@ -1,15 +1,44 @@
 services:
+  # Python Backend
   - type: web
-    name: evara-dashboard
+    name: evara-backend
+    runtime: docker
+    root: server
+    plan: free
+    region: singapore
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evara-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PORT
+        value: 8000
+      - key: PYTHON_VERSION
+        value: 3.10.12
+
+  # React Frontend
+  - type: web
+    name: evara-frontend
     env: static
-    buildCommand: npm run build
+    root: client
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
-        sync: false
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: evara-backend
+          property: url
+
+databases:
+  - name: evara-db
+    plan: free
+    databaseName: evara
+    user: evara_user
+    region: singapore
