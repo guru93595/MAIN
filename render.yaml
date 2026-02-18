@@ -25,7 +25,7 @@ services:
   - type: web
     name: evara-frontend
     env: static
-    buildCommand: npm install && npm run build && cp -r client/dist ./dist
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
