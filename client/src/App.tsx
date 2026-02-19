@@ -15,6 +15,7 @@ import RegionCustomers from './pages/admin/hierarchy/RegionCustomers';
 import CustomerDetails from './pages/admin/hierarchy/CustomerDetails';
 
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './components/ToastProvider';
 
 const SplashScreen = ({ onDone }: { onDone: () => void }) => {
     const [phase, setPhase] = useState<'in' | 'hold' | 'out'>('in');
@@ -85,51 +86,53 @@ function App() {
             {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
             {splashDone && (
                 <AuthProvider>
-                    <Router>
-                        <Routes>
-                            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                            <Route path="/login" element={<Login />} />
+                    <ToastProvider>
+                        <Router>
+                            <Routes>
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                                <Route path="/login" element={<Login />} />
 
-                            <Route element={<ProtectedRoute />}>
-                                <Route element={<MainLayout />}>
-                                    <Route path="/home" element={<Home />} />
-                                    <Route path="/dashboard" element={<Dashboard />} />
-                                    <Route path="/nodes" element={<AllNodes />} />
-                                    <Route path="/node/:id" element={<NodeDetails />} />
-                                    <Route path="/evaratank" element={<EvaraTank />} />
-                                    <Route path="/evaradeep" element={<EvaraDeep />} />
-                                    <Route path="/evaraflow" element={<EvaraFlow />} />
-                                    <Route path="/admin" element={<Admin />} />
-                                    <Route path="/ai" element={<AIAssistant />} />
-                                </Route>
+                                <Route element={<ProtectedRoute />}>
+                                    <Route element={<MainLayout />}>
+                                        <Route path="/home" element={<Home />} />
+                                        <Route path="/dashboard" element={<Dashboard />} />
+                                        <Route path="/nodes" element={<AllNodes />} />
+                                        <Route path="/node/:id" element={<NodeDetails />} />
+                                        <Route path="/evaratank" element={<EvaraTank />} />
+                                        <Route path="/evaradeep" element={<EvaraDeep />} />
+                                        <Route path="/evaraflow" element={<EvaraFlow />} />
+                                        <Route path="/admin" element={<Admin />} />
+                                        <Route path="/ai" element={<AIAssistant />} />
+                                    </Route>
 
-                                {/* Admin Routes (Super Admin & Distributor) */}
-                                <Route element={<ProtectedRoute allowedRoles={['superadmin', 'distributor']} />}>
-                                    <Route path="/superadmin" element={<AdminLayout />}>
-                                        <Route index element={<Navigate to="dashboard" replace />} />
-                                        <Route path="dashboard" element={<AdminDashboard />} />
-                                        <Route path="customers" element={<AdminCustomers />} />
+                                    {/* Admin Routes (Super Admin & Distributor) */}
+                                    <Route element={<ProtectedRoute allowedRoles={['superadmin', 'distributor']} />}>
+                                        <Route path="/superadmin" element={<AdminLayout />}>
+                                            <Route index element={<Navigate to="dashboard" replace />} />
+                                            <Route path="dashboard" element={<AdminDashboard />} />
+                                            <Route path="customers" element={<AdminCustomers />} />
 
-                                        {/* Hierarchy Routes */}
-                                        <Route path="regions" element={<RegionsOverview />} />
-                                        <Route path="regions/:regionId" element={<RegionCustomers />} />
-                                        <Route path="customers/:customerId" element={<CustomerDetails />} />
+                                            {/* Hierarchy Routes */}
+                                            <Route path="regions" element={<RegionsOverview />} />
+                                            <Route path="regions/:regionId" element={<RegionCustomers />} />
+                                            <Route path="customers/:customerId" element={<CustomerDetails />} />
 
-                                        {/* Legacy route redirects */}
-                                        <Route path="communities/:communityId" element={<Navigate to="../regions" replace />} />
+                                            {/* Legacy route redirects */}
+                                            <Route path="communities/:communityId" element={<Navigate to="../regions" replace />} />
 
-                                        {/* Legacy route redirects or keep if needed */}
-                                        <Route path="nodes" element={<Navigate to="regions" replace />} />
+                                            {/* Legacy route redirects or keep if needed */}
+                                            <Route path="nodes" element={<Navigate to="regions" replace />} />
 
-                                        <Route path="config" element={<AdminConfig />} />
+                                            <Route path="config" element={<AdminConfig />} />
+                                        </Route>
                                     </Route>
                                 </Route>
-                            </Route>
 
-                            {/* Catch-all redirect to Dashboard */}
-                            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                        </Routes>
-                    </Router>
+                                {/* Catch-all redirect to Dashboard */}
+                                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                            </Routes>
+                        </Router>
+                    </ToastProvider>
                 </AuthProvider>
             )}
         </>

@@ -67,6 +67,9 @@ async def poll_thingspeak_loop():
     from app.services.telemetry_processor import TelemetryProcessor
     from app.models import all_models as models
     from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    from app.services.websockets import manager
+    import json
     
     ts_service = ThingSpeakTelemetryService()
     
@@ -76,11 +79,12 @@ async def poll_thingspeak_loop():
         try:
             async with AsyncSessionLocal() as db:
                 # 1. Get Online Nodes with Config
-                # Filtering by status="Online" AND has thingspeak config
+                # Filtering by status="Online" OR "Offline" (to check if they come back)
                 result = await db.execute(
-                    select(models.Node).where(
-                        models.Node.status == "Online",
-                        models.Node.thingspeak_channel_id.isnot(None)
+                    select(models.Node)
+                    .options(joinedload(models.Node.thingspeak_mapping))
+                    .where(
+                        models.Node.status.in_(["Online", "Offline", "Alert"])
                     )
                 )
                 nodes = result.scalars().all()
@@ -89,17 +93,35 @@ async def poll_thingspeak_loop():
                 
                 # 2. Process each node (can be parallelized)
                 for node in nodes:
+                    if not node.thingspeak_mapping or not node.thingspeak_mapping.channel_id:
+                        continue
+                        
                     config = {
-                        "channel_id": node.thingspeak_channel_id,
-                        "read_key": node.thingspeak_read_api_key
+                        "channel_id": node.thingspeak_mapping.channel_id,
+                        "read_key": node.thingspeak_mapping.read_api_key
                     }
                     
-                    # Fetch last 10 mins or so? "results=5" is safer for frequent polling
-                    # Using fetch_latest (1 result) for now to keep it light
-                    reading = await ts_service.fetch_latest(node.id, config)
-                    
-                    if reading:
-                        await processor.process_readings(node.id, [reading])
+                    try:
+                        reading = await ts_service.fetch_latest(node.id, config)
+                        
+                        if reading:
+                            await processor.process_readings(node.id, [reading])
+                            if node.status != "Online":
+                                node.status = "Online"
+                                await db.commit()
+                                await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Online"}))
+                        else:
+                            # No reading returned, might be offline
+                            if node.status == "Online":
+                                node.status = "Offline"
+                                await db.commit()
+                                await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Offline"}))
+                    except Exception as node_e:
+                        print(f"Node {node.id} check failed: {node_e}")
+                        if node.status == "Online":
+                            node.status = "Offline"
+                            await db.commit()
+                            await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Offline"}))
                         
         except Exception as e:
             print(f"❌ Error in Polling Loop: {e}")

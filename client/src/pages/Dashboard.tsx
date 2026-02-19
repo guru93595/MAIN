@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
-    Activity, Droplets, ArrowUpRight, AlertTriangle,
+    Activity, ArrowUpRight, AlertTriangle,
     Server, Clock, Download, FileText
 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ import type { NodeRow } from '../types/database';
 import { getSystemHealth, type SystemHealth } from '../services/dashboard';
 import { getActiveAlerts, type AlertHistory } from '../services/alerts';
 import api from '../services/api';
+import { useTelemetry } from '../hooks/useTelemetry';
 
 function SyncAccountButton({ onSync }: { onSync: () => void }) {
     const [syncing, setSyncing] = useState(false);
@@ -97,6 +98,17 @@ const redIcon = L.divIcon({
     popupAnchor: [0, -24]
 });
 
+const ChangeView = ({ nodes }: { nodes: NodeRow[] }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (nodes.length > 0) {
+            const bounds = L.latLngBounds(nodes.map(n => [n.lat || 17.44, n.lng || 78.34]));
+            map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
+        }
+    }, [nodes, map]);
+    return null;
+};
+
 // ─── MiniMap Component ────────────────────────────────────────────────────────
 const MiniMap = ({ onExpand, nodes }: { onExpand: () => void, nodes: NodeRow[] }) => {
     return (
@@ -113,6 +125,7 @@ const MiniMap = ({ onExpand, nodes }: { onExpand: () => void, nodes: NodeRow[] }
                 scrollWheelZoom={true}
                 attributionControl={false}
             >
+                <ChangeView nodes={nodes} />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -136,11 +149,6 @@ const MiniMap = ({ onExpand, nodes }: { onExpand: () => void, nodes: NodeRow[] }
                 })}
             </MapContainer>
 
-            {/* Click-to-Expand Interaction Layer */}
-            {/* We place a button that is only visible/active on the edges or as a clear cue, 
-                but to satisfy "click anywhere", we'll put a button that covers the map 
-                but allows clicks to pass through if we use pointer-events-none on map elements? 
-                Actually, the cleanest way is a hover button. */}
             <button
                 onClick={onExpand}
                 className="absolute inset-0 z-[400] bg-transparent hover:bg-blue-600/5 transition-colors group cursor-pointer flex items-center justify-center"
@@ -152,12 +160,52 @@ const MiniMap = ({ onExpand, nodes }: { onExpand: () => void, nodes: NodeRow[] }
                 </div>
             </button>
 
-            {/* Legend (Simplified) */}
             <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur px-3 py-2 rounded-lg shadow-lg border border-white/50 z-[402] flex gap-3 scale-90 origin-bottom-left pointer-events-none">
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-600 inline-block" /><span className="text-[10px] font-semibold text-slate-600">PH</span></div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-600 inline-block" /><span className="text-[10px] font-semibold text-slate-600">Sump</span></div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-600 inline-block" /><span className="text-[10px] font-semibold text-slate-600">OHT</span></div>
                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /><span className="text-[10px] font-semibold text-slate-600">Bore</span></div>
+            </div>
+        </div>
+    );
+};
+
+const LiveFeedCard = ({ nodeId }: { nodeId?: string }) => {
+    const { data: telemetry, loading, error } = useTelemetry(nodeId);
+
+    if (!nodeId) return (
+        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-center items-center opacity-50">
+            <p className="text-xs font-bold text-slate-400 uppercase">No Active Source</p>
+        </div>
+    );
+
+    const firstMetric = telemetry ? Object.entries(telemetry.metrics)[0] : null;
+
+    return (
+        <div className="bg-white/100 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-blue-100 flex flex-col justify-between hover:shadow-md transition-all duration-300">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-xs font-bold text-blue-500 mb-1 uppercase tracking-tighter">Live Feed</p>
+                    {loading ? (
+                        <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
+                    ) : error ? (
+                        <h2 className="text-sm font-bold text-red-400">Check Credentials</h2>
+                    ) : firstMetric ? (
+                        <h2 className="text-3xl font-black text-slate-800">
+                            {typeof firstMetric[1] === 'number' ? firstMetric[1].toFixed(1) : firstMetric[1]}
+                            <span className="text-sm font-bold text-slate-400 ml-1 capitalize">{firstMetric[0]}</span>
+                        </h2>
+                    ) : (
+                        <h2 className="text-3xl font-bold text-slate-300">--</h2>
+                    )}
+                </div>
+                <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl animate-pulse">
+                    <Activity className="w-5 h-5" />
+                </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-lg">
+                <Clock className="w-3 h-3 text-blue-400" />
+                {telemetry?.timestamp ? new Date(telemetry.timestamp).toLocaleTimeString() : 'Waiting for feed...'}
             </div>
         </div>
     );
@@ -322,19 +370,8 @@ const Dashboard = () => {
                             </div>
                         </div>
 
-                        {/* Placeholder for future stat */}
-                        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between hover:shadow-md transition-all duration-300 opacity-50">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500 mb-1">Water Saved</p>
-                                    <h2 className="text-3xl font-bold text-slate-800">--</h2>
-                                </div>
-                                <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl">
-                                    <Droplets className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-4 text-xs font-medium text-slate-400">Coming Soon</div>
-                        </div>
+                        {/* Live Feed Card */}
+                        <LiveFeedCard nodeId={nodes.find(n => n.status === 'Online')?.id} />
                     </div>
                     {/* Row 2 — 4 device-type counters */}
                     <div className="flex-1 grid grid-cols-4 gap-4">

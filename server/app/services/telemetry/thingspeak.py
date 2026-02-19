@@ -14,10 +14,11 @@ class ThingSpeakTelemetryService(BaseTelemetryService):
     async def fetch_latest(self, node_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Fetch latest reading from ThingSpeak Channel.
-        Config must contain 'channel_id' and 'read_key'.
+        Config must contain 'channel_id', 'read_key', and 'field_mapping'.
         """
         channel_id = config.get("channel_id")
         read_key = config.get("read_key")
+        mapping = config.get("field_mapping", {})
         
         if not channel_id:
             return {}
@@ -40,18 +41,18 @@ class ThingSpeakTelemetryService(BaseTelemetryService):
                 
                 # Normalize Data
                 latest = feeds[0]
-                return self._normalize_reading(latest)
+                return self._normalize_reading(latest, mapping)
             except Exception as e:
-                # Log error
                 print(f"Error fetching ThingSpeak data for {node_id}: {e}")
                 return {}
 
     async def fetch_history(self, node_id: str, config: Dict[str, Any], days: int = 1) -> List[Dict[str, Any]]:
         """
-        Fetch historical data.
+        Fetch historical data and apply mapping.
         """
         channel_id = config.get("channel_id")
         read_key = config.get("read_key")
+        mapping = config.get("field_mapping", {})
         
         if not channel_id:
             return []
@@ -69,26 +70,35 @@ class ThingSpeakTelemetryService(BaseTelemetryService):
                 data = response.json()
                 
                 feeds = data.get("feeds", [])
-                return [self._normalize_reading(f) for f in feeds]
+                return [self._normalize_reading(f, mapping) for f in feeds]
             except Exception:
                 return []
 
-    async def push_reading(self, node_id: str, data: Dict[str, Any]) -> bool:
-        """
-        Not implemented for ThingSpeak usually (devices push directly), 
-        but could be used if backend proxies the write.
-        """
-        pass
-
-    def _normalize_reading(self, raw: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert ThingSpeak field1..N to named keys if possible."""
-        # In a real app, we'd map field1 -> 'flow_rate' based on Node config
-        # For now, just return raw with timestamp
-        return {
+    def _normalize_reading(self, raw: Dict[str, Any], mapping: Dict[str, str]) -> Dict[str, Any]:
+        """Convert ThingSpeak field1..N to named keys based on field_mapping."""
+        normalized = {
             "timestamp": raw.get("created_at"),
-            "entry_id": raw.get("entry_id"),
-            "field1": raw.get("field1"),
-            "field2": raw.get("field2"),
-            "field3": raw.get("field3"),
-            # ...
+            "entry_id": raw.get("entry_id")
         }
+        
+        # Apply Mapping: e.g. {"field1": "depth"} -> normalized["depth"] = raw["field1"]
+        for ts_field, alias in mapping.items():
+            if ts_field in raw:
+                try:
+                    val = raw[ts_field]
+                    # Try to convert to float/int if numeric
+                    if val is not None and isinstance(val, str):
+                        if '.' in val: val = float(val)
+                        else: val = int(val)
+                    normalized[alias] = val
+                except ValueError:
+                    normalized[alias] = raw[ts_field]
+        
+        # Always include raw fields as fallback if no mapping
+        if not mapping:
+            for i in range(1, 9):
+                key = f"field{i}"
+                if key in raw:
+                    normalized[key] = raw[key]
+                    
+        return normalized

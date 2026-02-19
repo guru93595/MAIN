@@ -32,6 +32,35 @@ export const useNodes = () => {
 
     useEffect(() => {
         fetchNodes();
+
+        // ─── WebSocket Reactive Listener ───
+        const wsBase = import.meta.env.VITE_API_URL
+            ? import.meta.env.VITE_API_URL.replace('http', 'ws')
+            : 'ws://localhost:8000/api/v1';
+
+        const wsUrl = `${wsBase}/ws/ws`;
+        console.log("Connecting to WebSocket:", wsUrl);
+
+        const socket = new WebSocket(wsUrl);
+
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.event === "NODE_PROVISIONED" || data.event === "STATUS_UPDATE") {
+                    console.log(`🚀 ${data.event} signal received! Refreshing fleet...`);
+                    fetchNodes();
+                }
+            } catch (e) {
+                // Not JSON or non-standard message
+            }
+        };
+
+        socket.onclose = () => console.log("WS Disconnected");
+        socket.onerror = (err) => console.error("WS Error:", err);
+
+        return () => {
+            socket.close();
+        };
     }, [fetchNodes]);
 
     return { nodes, loading, error, refresh: fetchNodes };

@@ -14,6 +14,21 @@ export interface DeviceDetails extends NodeRow {
     shadow_state?: DeviceShadow;
 }
 
+export interface LiveTelemetry {
+    device_id: string;
+    timestamp: string;
+    metrics: Record<string, number | string | null>;
+}
+
+export interface MapDevice {
+    id: string;
+    label: string;
+    category: string;
+    lat: number;
+    lng: number;
+    status: string;
+}
+
 export const getDeviceDetails = async (id: string): Promise<DeviceDetails> => {
     // Ideally this endpoint exists, currently using list. 
     // For now we might need to fetch list and find, or implement GET /devices/{id} on backend if missing.
@@ -50,5 +65,15 @@ export const exportDeviceReadings = async (id: string): Promise<void> => {
 
 export const createNode = async (node: Partial<NodeRow>): Promise<NodeRow> => {
     const response = await api.post<NodeRow>('/nodes/', node);
+    return response.data;
+};
+
+export const getLiveTelemetry = async (id: string): Promise<LiveTelemetry> => {
+    const response = await api.get<LiveTelemetry>(`/devices/${id}/live-data`);
+    return response.data;
+};
+
+export const getMapDevices = async (): Promise<MapDevice[]> => {
+    const response = await api.get<MapDevice[]>('/devices/map');
     return response.data;
 };

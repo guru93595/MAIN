@@ -1,17 +1,45 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { COMMUNITIES, CUSTOMERS, REGIONS } from '../../../data/mockAdminStructure';
-import type { Customer } from '../../../data/mockAdminStructure';
+import { adminService } from '../../../services/admin';
 import { ChevronRight, User, Smartphone, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const CommunityCustomers = () => {
     const { communityId } = useParams();
     const navigate = useNavigate();
+    const [community, setCommunity] = useState<any>(null);
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const community = COMMUNITIES.find(c => c.id === communityId);
-    const region = community ? REGIONS.find(r => r.id === community.regionId) : null;
-    const customers = CUSTOMERS.filter(c => c.communityId === communityId);
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [commData, custData] = await Promise.all([
+                    adminService.getCommunities(),
+                    adminService.getCustomers()
+                ]);
+                const currentComm = commData.find((c: any) => c.id === communityId);
+                const commCusts = custData.filter((c: any) => c.community_id === communityId);
 
-    if (!community) return <div>Community not found</div>;
+                setCommunity(currentComm);
+                setCustomers(commCusts);
+            } catch (error) {
+                console.error('Failed to fetch community customers:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [communityId]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    if (!community) return <div className="p-8 text-center text-slate-500">Community not found</div>;
 
     return (
         <div className="space-y-6">
@@ -19,7 +47,7 @@ const CommunityCustomers = () => {
             <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
                 <span onClick={() => navigate('/superadmin/regions')} className="hover:text-blue-600 cursor-pointer">Regions</span>
                 <ChevronRight size={14} />
-                <span onClick={() => navigate(`/superadmin/regions/${region?.id}`)} className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]">{region?.name}</span>
+                <span onClick={() => navigate(`/superadmin/regions/${community.region}`)} className="hover:text-blue-600 cursor-pointer truncate max-w-[100px]">{community.region}</span>
                 <ChevronRight size={14} />
                 <span className="font-bold text-slate-800">{community.name}</span>
             </div>
@@ -30,7 +58,7 @@ const CommunityCustomers = () => {
                     <p className="text-slate-500">Manage residents and their assigned devices.</p>
                 </div>
                 <button
-                    onClick={() => navigate(`/superadmin/regions/${region?.id}`)}
+                    onClick={() => navigate(`/superadmin/regions/${community.region}`)}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium"
                 >
                     <ArrowLeft size={16} /> Back
@@ -49,7 +77,7 @@ const CommunityCustomers = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {customers.map((customer: Customer) => (
+                        {customers.map((customer: any) => (
                             <tr
                                 key={customer.id}
                                 onClick={() => navigate(`/superadmin/customers/${customer.id}`)}
@@ -61,25 +89,24 @@ const CommunityCustomers = () => {
                                             <User size={16} />
                                         </div>
                                         <span className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-                                            {customer.name}
+                                            {customer.full_name}
                                         </span>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="text-sm">
                                         <p className="text-slate-800 font-medium">{customer.email}</p>
-                                        <p className="text-slate-400 text-xs">{customer.phone}</p>
+                                        <p className="text-slate-400 text-xs">{customer.contact_number || 'No Phone'}</p>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                         <Smartphone size={14} className="text-slate-400" />
-                                        {customer.devices.length} Devices
+                                        {customer.devices?.length || 0} Devices
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    {/* Status logic simplified for mock */}
-                                    {customer.devices.some(d => d.status === 'alert') ? (
+                                    {customer.devices?.some((d: any) => d.status === 'alert') ? (
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-600 text-xs font-bold border border-red-100">
                                             <AlertCircle size={12} /> Alert
                                         </span>

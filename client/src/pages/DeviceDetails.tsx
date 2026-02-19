@@ -3,9 +3,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Cpu, Activity,
-    Download, Power, RefreshCw
+    Download, Power, RefreshCw, Clock
 } from 'lucide-react';
 import { getDeviceDetails, updateDeviceShadow, exportDeviceReadings, type DeviceDetails } from '../services/devices';
+import { useTelemetry } from '../hooks/useTelemetry';
 
 export default function DeviceDetailsPage() {
     const { id } = useParams<{ id: string }>();
@@ -13,6 +14,7 @@ export default function DeviceDetailsPage() {
     const [device, setDevice] = useState<DeviceDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [toggling, setToggling] = useState(false);
+    const { data: telemetry, loading: telemetryLoading, error: telemetryError } = useTelemetry(id);
 
     useEffect(() => {
         if (id) fetchDevice(id);
@@ -113,6 +115,40 @@ export default function DeviceDetailsPage() {
                                 <Power className="w-6 h-6" />
                             </button>
                         </div>
+                    </div>
+
+                    {/* Real-Time Telemetry Grid */}
+                    <div className="mt-8">
+                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4 tracking-wider">Live Metrics</h4>
+                        {telemetryLoading && !telemetry ? (
+                            <div className="animate-pulse flex space-x-4">
+                                <div className="h-20 bg-slate-100 rounded-xl flex-1"></div>
+                                <div className="h-20 bg-slate-100 rounded-xl flex-1"></div>
+                            </div>
+                        ) : telemetryError ? (
+                            <div className="p-4 bg-red-50 text-red-600 rounded-xl text-xs font-medium border border-red-100">
+                                {telemetryError} (ThingSpeak Handshake Required)
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {Object.entries(telemetry?.metrics || {}).map(([key, value]) => (
+                                    <div key={key} className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 transition-all hover:shadow-sm">
+                                        <div className="text-[10px] font-extrabold text-blue-400 uppercase tracking-tighter">{key}</div>
+                                        <div className="text-2xl font-black text-blue-700 mt-1">
+                                            {typeof value === 'number' ? value.toFixed(1) : value}
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!telemetry || Object.keys(telemetry.metrics).length === 0) && (
+                                    <div className="col-span-full text-center py-6 text-slate-400 text-sm italic">
+                                        No live metrics registered for this device yet.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-4 flex items-center gap-1.5">
+                            <Clock size={12} /> Last valid feed: {telemetry?.timestamp ? new Date(telemetry.timestamp).toLocaleString() : 'Never'}
+                        </p>
                     </div>
 
                     {/* Shadow State Debug (Optional) */}

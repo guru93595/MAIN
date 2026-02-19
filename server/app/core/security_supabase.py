@@ -36,7 +36,10 @@ def verify_supabase_token(token: str) -> Dict[str, Any]:
             "user_metadata": {
                 "role": role,
                 "display_name": "Dev User",
-                "community_id": "comm_myhome"
+            },
+            "app_metadata": {
+                "role": role,
+                "distributor_id": "dist_mock_123" if role == "distributor" else None
             },
             "aud": "authenticated"
         }
@@ -77,16 +80,25 @@ class RequirePermission:
         self.permission = permission
 
     def __call__(self, user_payload: Dict[str, Any] = Depends(get_current_user_token)):
-        # Extract role from metadata
+        # Extract role from metadata (check app_metadata first for custom claims)
+        app_metadata = user_payload.get("app_metadata", {})
         user_metadata = user_payload.get("user_metadata", {})
-        role = user_metadata.get("role", "customer")
+        
+        role = app_metadata.get("role") or user_metadata.get("role") or "customer"
         
         # Verify permission
-        from app.core.permissions import has_permission, Permission
+        from app.core.permissions import has_permission
         
         if not has_permission(role, self.permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Missing permission: {self.permission}"
             )
+            
+        # Inject effective metadata into payload for downstream use
+        user_payload["role"] = role
+        user_payload["id"] = user_payload.get("sub")
+        # Custom Claims isolation
+        user_payload["distributor_id"] = app_metadata.get("distributor_id")
+        
         return user_payload

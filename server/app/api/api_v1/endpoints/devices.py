@@ -12,6 +12,13 @@ import uuid
 from sqlalchemy import select
 from app.core.security_supabase import RequirePermission
 from app.core.ratelimit import RateLimiter
+from app.services.telemetry.thingspeak import ThingSpeakTelemetryService
+from app.db.repository import NodeRepository
+import time
+
+# simple TTL cache: { "device_id": (timestamp, data) }
+live_telemetry_cache = {}
+CACHE_TTL = 30 # seconds
 
 router = APIRouter()
 
@@ -186,3 +193,70 @@ async def update_device_shadow(
     
     await db.commit()
     return node.shadow_state
+
+@router.get("/map", response_model=List[dict])
+async def list_devices_for_map(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(RequirePermission(Permission.DEVICE_READ))
+):
+    """
+    Lightweight Geo-metadata for Map plotting.
+    """
+    result = await db.execute(select(models.Node))
+    nodes = result.scalars().all()
+    
+    return [
+        {
+            "id": n.id,
+            "label": n.label,
+            "category": n.category,
+            "lat": n.lat,
+            "lng": n.lng,
+            "status": n.status
+        }
+        for n in nodes if n.lat and n.lng
+    ]
+
+@router.get("/{node_id}/live-data", response_model=dict)
+async def get_device_live_data(
+    node_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(RequirePermission(Permission.DEVICE_READ))
+):
+    """
+    Fetch live telemetry using stored ThingSpeak credentials.
+    Implements 30s TTL Caching.
+    """
+    now = time.time()
+    if node_id in live_telemetry_cache:
+        ts, data = live_telemetry_cache[node_id]
+        if now - ts < CACHE_TTL:
+            return data
+
+    repo = NodeRepository(db)
+    node = await repo.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    if not node.thingspeak_mapping:
+         raise HTTPException(status_code=400, detail="Device has no telemetry mapping")
+
+    ts_service = ThingSpeakTelemetryService()
+    config = {
+        "channel_id": node.thingspeak_mapping.channel_id,
+        "read_key": node.thingspeak_mapping.read_api_key,
+        "field_mapping": node.thingspeak_mapping.field_mapping
+    }
+    
+    data = await ts_service.fetch_latest(node_id, config)
+    if not data:
+        raise HTTPException(status_code=503, detail="Unable to fetch live telemetry from ThingSpeak")
+        
+    response = {
+        "device_id": node_id,
+        "timestamp": data.get("timestamp"),
+        "metrics": {k: v for k, v in data.items() if k not in ["timestamp", "entry_id"]}
+    }
+    
+    live_telemetry_cache[node_id] = (now, response)
+    return response

@@ -1,16 +1,37 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { REGIONS, COMMUNITIES } from '../../../data/mockAdminStructure';
-import type { Community } from '../../../data/mockAdminStructure';
+import { adminService } from '../../../services/admin';
 import { ChevronRight, Building, Wifi, ArrowLeft } from 'lucide-react';
 
 const RegionCommunities = () => {
-    const { regionId } = useParams();
+    const { regionId } = useParams(); // regionId is actually the region name here
     const navigate = useNavigate();
+    const [communities, setCommunities] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const region = REGIONS.find(r => r.id === regionId);
-    const communities = COMMUNITIES.filter(c => c.regionId === regionId);
+    useEffect(() => {
+        const fetchCommunities = async () => {
+            try {
+                const data = await adminService.getCommunities();
+                // Filter by region name (URL parameter)
+                const regionComms = data.filter((c: any) => c.region === regionId);
+                setCommunities(regionComms);
+            } catch (error) {
+                console.error('Failed to fetch communities:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchCommunities();
+    }, [regionId]);
 
-    if (!region) return <div>Region not found</div>;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -18,12 +39,12 @@ const RegionCommunities = () => {
             <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
                 <span onClick={() => navigate('/superadmin/regions')} className="hover:text-blue-600 cursor-pointer">Regions</span>
                 <ChevronRight size={14} />
-                <span className="font-bold text-slate-800">{region.name}</span>
+                <span className="font-bold text-slate-800">{regionId}</span>
             </div>
 
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">{region.name} Communities</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">{regionId} Communities</h2>
                     <p className="text-slate-500">Select a community to manage customers and devices.</p>
                 </div>
                 <button
@@ -46,7 +67,7 @@ const RegionCommunities = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {communities.map((community: Community) => (
+                        {communities.map((community: any) => (
                             <tr
                                 key={community.id}
                                 onClick={() => navigate(`/superadmin/communities/${community.id}`)}
@@ -63,24 +84,24 @@ const RegionCommunities = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                                    {community.zone}
+                                    {community.city || 'N/A'}
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                         <Wifi size={14} className="text-slate-400" />
-                                        {community.stats.nodes} Nodes
+                                        {community.nodes?.length || 0} Nodes
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-2">
                                         <div className="w-16 h-1.5 rounded-full bg-slate-100 overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full ${community.stats.health > 90 ? 'bg-green-500' : 'bg-amber-500'}`}
-                                                style={{ width: `${community.stats.health}%` }}
+                                                className="h-full rounded-full bg-green-500"
+                                                style={{ width: '100%' }}
                                             />
                                         </div>
-                                        <span className={`text-xs font-bold ${community.stats.health > 90 ? 'text-green-600' : 'text-amber-600'}`}>
-                                            {community.stats.health}%
+                                        <span className="text-xs font-bold text-green-600">
+                                            100%
                                         </span>
                                     </div>
                                 </td>
