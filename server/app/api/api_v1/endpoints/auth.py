@@ -13,7 +13,7 @@ from app.db.repository import UserRepository
 settings = get_settings()
 router = APIRouter()
 
-@router.post("/sync", response_model=schemas.User)
+@router.post("/sync", response_model=schemas.UserResponse)
 async def sync_user_profile(
     user_payload: Dict[str, Any] = Depends(security_supabase.get_current_user_token),
     db: AsyncSession = Depends(get_db)
@@ -48,7 +48,7 @@ async def sync_user_profile(
             organization_id="org_evara_hq",
             community_id="comm_myhome"  # Default community for new users
         )
-        attrs = user_in.model_dump(exclude={"password"})
+        attrs = user_in.model_dump()
         user = await repo.create(attrs)
     else:
         # Update existing user metadata if needed

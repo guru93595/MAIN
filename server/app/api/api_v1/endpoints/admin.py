@@ -55,7 +55,7 @@ async def read_distributors(
 @router.get("/communities", response_model=List[schemas.CommunityResponse])
 async def read_communities(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(RequirePermission(Permission.COMMUNITY_VIEW))
+    user: dict = Depends(RequirePermission(Permission.COMMUNITY_READ))
 ):
     repo = CommunityRepository(db)
     dist_id = get_effective_distributor_id(user)
@@ -475,7 +475,7 @@ async def read_audit_logs(
 @router.get("/stats")
 async def read_system_stats(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(RequirePermission(Permission.COMMUNITY_VIEW))
+    user: dict = Depends(RequirePermission(Permission.COMMUNITY_READ))
 ):
     dist_id = get_effective_distributor_id(user)
     

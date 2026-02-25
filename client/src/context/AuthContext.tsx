@@ -152,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const DEV_ADMINS = ['ritik@evaratech.com', 'yasha@evaratech.com', 'aditya@evaratech.com', 'admin@evara.com'];
         if (DEV_ADMINS.includes(email) && password === 'evaratech@1010') {
             const mockUser: User = {
-                id: 'dev-bypass-id-' + email,
+                id: 'dev-bypass-usr_admin',
                 email,
                 displayName: 'Dev SuperAdmin',
                 role: 'superadmin',

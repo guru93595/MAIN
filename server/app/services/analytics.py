@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
-from app.models.all_models import NodeReading, Node
+from app.models.all_models import Node
 from app.db.repository import NodeRepository
 from functools import lru_cache
 
@@ -31,24 +31,24 @@ class NodeAnalyticsService:
         """O(1) lookup using the inverted index."""
         return _LOCATION_INDEX.get(query.lower(), [])
 
-    def calculate_rolling_average(self, readings: List[NodeReading], window: int = 7) -> float:
+    def calculate_rolling_average(self, readings: List[Dict[str, Any]], window: int = 7) -> float:
         """Calculates 7-day rolling average using Pandas."""
         if not readings:
             return 0.0
         
-        df = pd.DataFrame([r.data for r in readings])
+        df = pd.DataFrame(readings)
         if 'value' not in df.columns:
             return 0.0
             
         return df['value'].rolling(window=window).mean().iloc[-1]
 
-    def predict_days_to_empty(self, readings: List[NodeReading], capacity: float) -> int:
+    def predict_days_to_empty(self, readings: List[Dict[str, Any]], capacity: float) -> int:
         """Uses Linear Regression to predict when tank will be empty."""
         if len(readings) < 10:
             return -1 # Not enough data
             
         df = pd.DataFrame([
-            {"timestamp": r.timestamp.timestamp(), "value": r.data.get('level', 0)} 
+            {"timestamp": r.get('timestamp', datetime.utcnow().timestamp()), "value": r.get('level', 0)} 
             for r in readings
         ])
         

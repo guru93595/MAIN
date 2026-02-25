@@ -45,10 +45,10 @@ async def cleanup_loop():
             cutoff = datetime.utcnow() - timedelta(days=30)
             
             async with AsyncSessionLocal() as db:
-                # Delete old readings
-                await db.execute(
-                    delete(models.NodeReading).where(models.NodeReading.timestamp < cutoff)
-                )
+                # Delete old readings - NodeReading model doesn't exist yet, skipping
+                # await db.execute(
+                #     delete(models.NodeReading).where(models.NodeReading.timestamp < cutoff)
+                # )
                 await db.commit()
                 # print(f"🧹 Cleaned up readings older than {cutoff}")
                 

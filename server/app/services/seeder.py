@@ -1,6 +1,6 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.all_models import User, TankNode, DeepNode, FlowNode, Pipeline, NodeAssignment, Organization, Region, Community, Node
+from app.models.all_models import User, Node
 from app.db.session import AsyncSessionLocal
 from app.core.config import get_settings
 from datetime import datetime
@@ -71,55 +71,27 @@ async def seed_db(force: bool = True):
         async with asyncio.timeout(5):
             print("🌱 Seeding Database...")
             async with AsyncSessionLocal() as session:
-                # 1. Hierarchy
-                # Ensure Org
-                org = await session.get(Organization, "org_evara_hq")
-                if not org:
-                    org = Organization(id="org_evara_hq", name="Evara HQ", plan_tier="enterprise")
-                    session.add(org)
-                    
-                region = await session.get(Region, "reg_hyd_north")
-                if not region:
-                    region = Region(id="reg_hyd_north", name="Hyderabad North", organization_id="org_evara_hq")
-                    session.add(region)
-                    
-                community = await session.get(Community, "comm_myhome")
-                if not community:
-                    community = Community(id="comm_myhome", name="My Home Avatar", region_id="reg_hyd_north", organization_id="org_evara_hq")
-                    session.add(community)
-                    
-                await session.flush()
-
-                # 2. Users (Linked to Org/Community)
+                # 1. Users
                 for u in INITIAL_USERS:
                     existing = await session.get(User, u["id"])
                     if not existing:
-                        u_data = u.copy()
-                        u_data["organization_id"] = "org_evara_hq"
-                        u_data["community_id"] = "comm_myhome"
-                        session.add(User(**u_data))
+                        session.add(User(**u))
                 
-                # 3. Nodes (Linked to Org/Community)
+                # 2. Nodes
                 nodes_added = 0
                 for n in INITIAL_NODES:
                     n_data = n.copy()
-                    ntype = n_data.pop("type")
-                    node_id = n_data["id"]
+                    node_id = n_data.pop("id")
                     
                     existing_node = await session.get(Node, node_id)
                     if existing_node:
-                        # Node exists, skip without error
                         continue
-
-                    n_data["organization_id"] = "org_evara_hq"
-                    n_data["community_id"] = "comm_myhome"
                     
-                    if ntype == "EvaraTank":
-                        session.add(TankNode(analytics_type="EvaraTank", **n_data))
-                    elif ntype == "EvaraDeep":
-                        session.add(DeepNode(analytics_type="EvaraDeep", **n_data))
-                    elif ntype == "EvaraFlow":
-                        session.add(FlowNode(analytics_type="EvaraFlow", **n_data))
+                    n_data["id"] = node_id
+                    # Ensure created_at is set
+                    if "created_at" not in n_data:
+                        n_data["created_at"] = datetime.utcnow()
+                    session.add(Node(**n_data))
                     nodes_added += 1
                 
                 await session.commit()

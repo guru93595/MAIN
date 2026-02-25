@@ -180,8 +180,34 @@ class UserBase(BaseModel):
     display_name: str | None = None
     role: str = "customer"
 
+class UserCreate(UserBase):
+    id: str
+    organization_id: str | None = None
+    community_id: str | None = None
+
 class UserResponse(UserBase):
     id: str
+    
+    class Config:
+        from_attributes = True
+
+# ─── ANALYTICS SCHEMAS ───
+class NodeAnalyticsResponse(BaseModel):
+    node_id: str
+    days_to_empty: int
+    rolling_avg_flow: float
+
+# ─── SIMPLE NODE RESPONSE ───
+class SimpleNodeResponse(BaseModel):
+    id: str
+    node_key: str
+    label: str
+    category: str
+    analytics_type: str
+    status: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True

@@ -85,6 +85,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default="customer") # superadmin, distributor, customer
+    community_id: Mapped[str] = mapped_column(String, nullable=True)
+    organization_id: Mapped[str] = mapped_column(String, nullable=True)
     
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")

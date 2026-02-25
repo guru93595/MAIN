@@ -38,7 +38,7 @@ async def create_node(
     node = await repo.create(node_data)
     return node
 
-@router.get("/", response_model=List[schemas.NodeResponse])
+@router.get("/", response_model=List[schemas.SimpleNodeResponse])
 async def read_nodes(
     db: AsyncSession = Depends(get_db),
     skip: int = 0,
