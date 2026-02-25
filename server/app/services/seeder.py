@@ -67,8 +67,8 @@ INITIAL_NODES = [
 async def seed_db(force: bool = True):
     import asyncio
     try:
-        # Strict 5-second timeout to prevent startup hang
-        async with asyncio.timeout(5):
+        # 30-second timeout to prevent startup hang but allow pooler connection
+        async with asyncio.timeout(30):
             print("🌱 Seeding Database...")
             async with AsyncSessionLocal() as session:
                 # 1. Users
@@ -86,6 +86,10 @@ async def seed_db(force: bool = True):
                     existing_node = await session.get(Node, node_id)
                     if existing_node:
                         continue
+                    
+                    # Map 'type' to 'analytics_type' for the model
+                    if "type" in n_data:
+                        n_data["analytics_type"] = n_data.pop("type")
                     
                     n_data["id"] = node_id
                     # Ensure created_at is set

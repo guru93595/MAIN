@@ -208,6 +208,66 @@ class SimpleNodeResponse(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     created_at: datetime
+    location_name: Optional[str] = None
+    capacity: Optional[str] = None
+    thingspeak_channel_id: Optional[str] = None
+    thingspeak_read_api_key: Optional[str] = None
+    created_by: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# ─── NODE ASSIGNMENT SCHEMAS ───
+class NodeAssignmentBase(BaseModel):
+    node_id: str
+    user_id: str
+    assigned_by: Optional[str] = None
+
+class NodeAssignmentCreate(NodeAssignmentBase):
+    pass
+
+class NodeAssignmentResponse(NodeAssignmentBase):
+    id: str
+    assigned_at: datetime
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ─── PIPELINE SCHEMAS ───
+class PipelineBase(BaseModel):
+    name: str
+    color: str = "#000000"
+    positions: Optional[List[List[float]]] = None
+
+class PipelineCreate(PipelineBase):
+    pass
+
+class PipelineResponse(PipelineBase):
+    id: str
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ─── NODE ANALYTICS SCHEMAS ───
+class NodeAnalyticsBase(BaseModel):
+    node_id: str
+    period_type: str
+    period_start: datetime
+    consumption_liters: Optional[float] = None
+    avg_level_percent: Optional[float] = None
+    peak_flow: Optional[float] = None
+    analytics_metadata: Optional[Dict[str, Any]] = None
+
+class NodeAnalyticsCreate(NodeAnalyticsBase):
+    pass
+
+class NodeAnalyticsResponse(NodeAnalyticsBase):
+    id: str
+    created_at: datetime
     
     class Config:
         from_attributes = True

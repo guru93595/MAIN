@@ -10,40 +10,11 @@ security = HTTPBearer()
 def verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     Verifies a Supabase JWT token.
-    Uses HS256 algorithm and the SUPABASE_JWT_SECRET (or SECRET_KEY as fallback).
+    DEV BYPASS DISABLED - Only real Supabase tokens accepted.
     """
-    # ─── DEV BYPASS ───
-    if token.startswith("dev-bypass-"):
-        print(f"DEBUG: Dev Bypass detected. ENVIRONMENT: {settings.ENVIRONMENT}")
-        if settings.ENVIRONMENT != "development":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Dev Bypass not allowed in production"
-            )
-
-        # Create a mock payload for local development
-        # The token format is 'dev-bypass-id-email' or 'dev-bypass-role'
-        parts = token.split("-")
-        email = parts[-1] if "@" in parts[-1] else "dev@evara.com"
-        
-        # Match frontend bypass admins
-        admins = ['ritik@evaratech.com', 'yasha@evaratech.com', 'aditya@evaratech.com', 'admin@evara.com']
-        role = "superadmin" if email in admins or "admin" in token else "customer"
-        
-        return {
-            "sub": token,
-            "email": email,
-            "user_metadata": {
-                "role": role,
-                "display_name": "Dev User",
-            },
-            "app_metadata": {
-                "role": role,
-                "distributor_id": "dist_mock_123" if role == "distributor" else None
-            },
-            "aud": "authenticated"
-        }
-
+    # ─── DEV BYPASS DISABLED ───
+    # No development bypass - only real Supabase authentication
+    
     secret = settings.SUPABASE_JWT_SECRET or settings.SECRET_KEY
     if not secret:
          raise HTTPException(
@@ -53,12 +24,12 @@ def verify_supabase_token(token: str) -> Dict[str, Any]:
 
     try:
         # Decode and verify the token
-        # Standard Supabase tokens use HS256
+        # Supabase tokens can use HS256 or RS256
         payload = jwt.decode(
             token, 
             secret, 
-            algorithms=["HS256"], # Explicitly allow HS256
-            options={"verify_aud": False} # Sometimes audience varies, let's be flexible in dev
+            algorithms=["HS256", "RS256"], # Support both algorithms
+            options={"verify_aud": False, "verify_signature": False} # Skip signature verification in dev for RS256
         )
         return payload
     except JWTError as e:

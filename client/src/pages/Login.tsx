@@ -32,7 +32,7 @@ const Login = () => {
         setStep('credentials');
         setError('');
         // Pre-fill email for demo convenience if desired, or leave blank
-        if (role === 'superadmin') setEmail('ritik@evaratech.com');
+        if (role === 'superadmin') setEmail('admin@evaratech.com');
         else setEmail('');
     };
 
@@ -52,8 +52,31 @@ const Login = () => {
         setError('');
         setIsLoading(true);
 
+        // ─── INPUT VALIDATION ───
+        if (!email || !password) {
+            setError('Email and password are required.');
+            setIsLoading(false);
+            return;
+        }
+
+        // Basic email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            setError('Please enter a valid email address.');
+            setIsLoading(false);
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters long.');
+            setIsLoading(false);
+            return;
+        }
+
+        console.log('Attempting login with:', { email, passwordLength: password.length });
+
         const timeoutPromise = new Promise<{ timeout: true }>((_, reject) =>
-            setTimeout(() => reject(new Error('Request timed out. Please check your connection.')), 10000)
+            setTimeout(() => reject(new Error('Request timed out. The server or database took too long to respond. Please try again.')), 30000)
         );
 
         try {
@@ -64,35 +87,64 @@ const Login = () => {
                     timeoutPromise
                 ]) as Awaited<ReturnType<typeof loginFn>>;
 
+                console.log('Login result:', result);
+
                 if (result.success) {
                     if (selectedRole === 'superadmin') {
-                        // ─── DEV BYPASS CHECK ───
-                        const DEV_ADMINS = ['ritik@evaratech.com', 'yasha@evaratech.com', 'aditya@evaratech.com', 'admin@evara.com'];
-                        if (DEV_ADMINS.includes(email)) {
-                            navigate('/dashboard'); // User requested Dashboard first
-                            return;
-                        }
-
-                        // Strict Check with timeout (Real Users)
+                        // ─── STRICT AUTHENTICATION CHECK (NO BYPASS) ───
                         const { data: { user } } = await supabase.auth.getUser();
                         if (user) {
+                            console.log('Checking profile for user:', user.id);
+
                             const { data: profile, error: profileError } = await supabase
                                 .from('users_profiles')
                                 .select('role')
                                 .eq('id', user.id)
-                                .single(); // This might fail if no profile, but we check error
+                                .single();
+
+                            console.log('Profile result:', { profile, profileError });
 
                             if (profileError) {
                                 console.error('Profile fetch error:', profileError);
-                                throw new Error('Failed to verify user profile.');
+                                // Try to sync with backend first
+                                console.log('Attempting to sync with backend...');
+                                try {
+                                    const response = await fetch('http://localhost:8000/api/v1/auth/sync', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${await supabase.auth.getSession().then(s => s.data.session?.access_token)}`,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+
+                                    if (response.ok) {
+                                        console.log('Backend sync successful, retrying profile check...');
+                                        // Retry profile check after sync
+                                        const { data: retryProfile, error: retryError } = await supabase
+                                            .from('users_profiles')
+                                            .select('role')
+                                            .eq('id', user.id)
+                                            .single();
+
+                                        if (!retryError && retryProfile && 'role' in retryProfile && retryProfile.role === 'superadmin') {
+                                            navigate('/dashboard');
+                                            return;
+                                        }
+                                    }
+                                } catch (syncError) {
+                                    console.error('Backend sync failed:', syncError);
+                                }
+
+                                setError('Authentication failed: User profile not found. Please try again.');
+                                return;
                             }
 
-                            const p = profile as any;
-                            if (p?.role === 'superadmin') {
-                                navigate('/dashboard'); // User requested Dashboard first
+                            if (profile && 'role' in profile && profile.role === 'superadmin') {
+                                console.log('User is superadmin, redirecting to dashboard...');
+                                navigate('/dashboard');
                             } else {
                                 await supabase.auth.signOut();
-                                setError('Access Denied: You are not a Super Admin.');
+                                setError(`Access Denied: Your role is '${(profile && 'role' in profile) ? profile.role : 'unknown'}', but SuperAdmin is required.`);
                             }
                         } else {
                             setError('Authentication failed. Please try again.');

@@ -11,11 +11,16 @@ export const useNodes = () => {
         setLoading(true);
         try {
             const response = await api.get<NodeRow[]>('/nodes/');
+            console.log('🔍 Nodes API Response:', response.data);
             setNodes(response.data);
             setError(null);
         } catch (err: any) {
             const status = err.response?.status;
             const detail = err.response?.data?.detail;
+            console.error('❌ Error fetching nodes:', err);
+            console.error('Response status:', status);
+            console.error('Response detail:', detail);
+            
             if (status === 401) {
                 const msg = typeof detail === "string" && detail.includes("not synchronized")
                     ? "Your account is not synced with the backend. Please log out and log in again."
@@ -24,7 +29,6 @@ export const useNodes = () => {
             } else {
                 setError(typeof detail === "string" ? detail : "Failed to fetch nodes");
             }
-            console.error("Error fetching nodes:", err);
         } finally {
             setLoading(false);
         }

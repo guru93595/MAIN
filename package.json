@@ -6,7 +6,7 @@
         "install:server": "cd server && pip install -r requirements.txt",
         "setup": "npm run install:client && npm run install:server",
         "dev:client": "cd client && npm run dev",
-        "dev:server": "cd server && uvicorn main:app --reload --port 8000",
+        "dev:server": "cd server && set PYTHONIOENCODING=utf-8 && python -m uvicorn main:app --reload --port 8000",
         "start": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
         "build": "cd client && npm install && npm run build"
     },

@@ -89,7 +89,7 @@ const ANALYTICS_CONFIG: Record<AnalyticsType, {
 }> = {
     EvaraTank: {
         label: 'EvaraTank',
-        desc: 'OHTs & Sumps',
+        desc: 'Overhead Tanks & Sumps (25)',
         icon: <Droplets size={16} />,
         activeBg: 'bg-indigo-600',
         activeText: 'text-white',
@@ -99,7 +99,7 @@ const ANALYTICS_CONFIG: Record<AnalyticsType, {
     },
     EvaraDeep: {
         label: 'EvaraDeep',
-        desc: 'Borewells',
+        desc: 'Borewells (12)',
         icon: (
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="5" r="2" /><line x1="12" y1="7" x2="12" y2="20" />
@@ -109,18 +109,18 @@ const ANALYTICS_CONFIG: Record<AnalyticsType, {
         activeBg: 'bg-sky-600',
         activeText: 'text-white',
         activeBorder: 'border-sky-600',
-        badge: 'bg-sky-50 text-sky-700 border border-sky-200',
+        badge: 'bg-sky-50 text-sky-600 border border-sky-200',
         dot: 'bg-sky-500',
     },
     EvaraFlow: {
         label: 'EvaraFlow',
-        desc: 'Pump Houses',
-        icon: <Waves size={16} />,
-        activeBg: 'bg-cyan-600',
+        desc: 'Pump Houses (4)',
+        icon: <Gauge size={16} />,
+        activeBg: 'bg-emerald-600',
         activeText: 'text-white',
-        activeBorder: 'border-cyan-600',
-        badge: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
-        dot: 'bg-cyan-500',
+        activeBorder: 'border-emerald-600',
+        badge: 'bg-emerald-50 text-emerald-600 border border-emerald-200',
+        dot: 'bg-emerald-500',
     },
 };
 
@@ -134,15 +134,30 @@ const AllNodes = () => {
     const { nodes, loading, error } = useNodes();
 
     const filtered = nodes.filter(n => {
-        const matchAnalytics = analyticsFilter === 'all' || n.analytics_type === analyticsFilter;
-        const matchStatus = statusFilter === 'all' || n.status === statusFilter;
-        const q = search.toLowerCase();
-        const matchSearch = !q || n.label.toLowerCase().includes(q) || n.location_name.toLowerCase().includes(q) || n.node_key.toLowerCase().includes(q);
-        return matchAnalytics && matchStatus && matchSearch;
+        try {
+            // Handle missing properties gracefully
+            const nodeLabel = n.label || '';
+            const nodeLocation = n.location_name || '';
+            const nodeKey = n.node_key || '';
+            const nodeAnalytics = n.analytics_type || '';
+            const nodeStatus = n.status || '';
+            
+            const matchAnalytics = analyticsFilter === 'all' || nodeAnalytics === analyticsFilter;
+            const matchStatus = statusFilter === 'all' || nodeStatus === statusFilter;
+            const q = search.toLowerCase();
+            const matchSearch = !q || 
+                nodeLabel.toLowerCase().includes(q) || 
+                nodeLocation.toLowerCase().includes(q) || 
+                nodeKey.toLowerCase().includes(q);
+            return matchAnalytics && matchStatus && matchSearch;
+        } catch (e) {
+            console.error('Error filtering node:', n, e);
+            return false;
+        }
     });
 
-    const onlineCount = nodes.filter(n => n.status === 'Online').length;
-    const offlineCount = nodes.filter(n => n.status === 'Offline').length;
+    const onlineCount = nodes.filter(n => (n.status || '') === 'Online').length;
+    const offlineCount = nodes.filter(n => (n.status || '') === 'Offline').length;
 
     return (
         <div className="min-h-full bg-slate-50">
@@ -243,7 +258,7 @@ const AllNodes = () => {
                     {/* EvaraTank / EvaraDeep / EvaraFlow tabs */}
                     {(Object.keys(ANALYTICS_CONFIG) as AnalyticsType[]).map(key => {
                         const cfg = ANALYTICS_CONFIG[key];
-                        const count = nodes.filter(n => n.analytics_type === key).length;
+                        const count = nodes.filter(n => (n.analytics_type || '') === key).length;
                         const active = analyticsFilter === key;
                         return (
                             <button
@@ -298,50 +313,50 @@ const AllNodes = () => {
                 ) : filtered.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                         {filtered.map(node => {
-                            const cfg = CATEGORY_CONFIG[node.category];
-                            const anCfg = ANALYTICS_CONFIG[node.analytics_type];
-                            const isOnline = node.status === 'Online';
+                            const cfg = CATEGORY_CONFIG[node.category || 'OHT'];
+                            const anCfg = ANALYTICS_CONFIG[node.analytics_type || 'EvaraTank'];
+                            const isOnline = (node.status || '') === 'Online';
                             return (
                                 <Link
-                                    key={node.node_key}
-                                    to={`/node/${node.node_key}`}
+                                    key={node.node_key || node.id}
+                                    to={`/node/${node.node_key || node.id}`}
                                     className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col"
                                 >
                                     {/* Card top accent — analytics color */}
-                                    <div className={clsx('h-1 w-full', anCfg.dot)} />
+                                    <div className={clsx('h-1 w-full', anCfg?.dot || 'bg-blue-500')} />
 
                                     <div className="p-5 flex flex-col flex-1">
                                         {/* Icon + status */}
                                         <div className="flex items-start justify-between mb-4">
                                             <div className={clsx(
                                                 'w-11 h-11 rounded-2xl flex items-center justify-center transition-colors',
-                                                cfg.bg, cfg.color,
+                                                cfg?.bg || 'bg-blue-50', cfg?.color || 'text-blue-600',
                                                 'group-hover:scale-110 transition-transform duration-200'
                                             )}>
-                                                {cfg.icon}
+                                                {cfg?.icon || <Droplets size={20} />}
                                             </div>
                                             <span className={clsx(
                                                 'flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full',
                                                 isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                                             )}>
                                                 <span className={clsx('w-1.5 h-1.5 rounded-full', isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-400')} />
-                                                {node.status}
+                                                {node.status || 'Unknown'}
                                             </span>
                                         </div>
 
                                         {/* Name + ID */}
                                         <h3 className="font-bold text-slate-800 text-base leading-snug mb-1 group-hover:text-blue-600 transition-colors">
-                                            {node.label}
+                                            {node.label || 'Unknown Device'}
                                         </h3>
-                                        <p className="text-xs text-slate-400 font-mono mb-3">{node.node_key}</p>
+                                        <p className="text-xs text-slate-400 font-mono mb-3">{node.node_key || node.id}</p>
 
                                         {/* Category + analytics badges */}
                                         <div className="flex flex-wrap gap-1.5 mb-4">
-                                            <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-md', cfg.badge)}>
-                                                {cfg.label}
+                                            <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-md', cfg?.badge || 'bg-blue-100 text-blue-700')}>
+                                                {cfg?.label || 'Unknown'}
                                             </span>
-                                            <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-md', anCfg.badge)}>
-                                                {node.analytics_type}
+                                            <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-md', anCfg?.badge || 'bg-cyan-100 text-cyan-700')}>
+                                                {node.analytics_type || 'Unknown'}
                                             </span>
                                         </div>
 
@@ -349,10 +364,10 @@ const AllNodes = () => {
                                         <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
                                             <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                                 <MapPin size={12} />
-                                                <span className="font-medium">{node.location_name}</span>
+                                                <span className="font-medium">{node.location_name || 'No Location'}</span>
                                             </div>
                                             <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
-                                                {node.capacity}
+                                                {node.capacity || 'N/A'}
                                             </span>
                                         </div>
                                     </div>

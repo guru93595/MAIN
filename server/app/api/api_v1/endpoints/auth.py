@@ -40,6 +40,7 @@ async def sync_user_profile(
         # Create new user
         # Assign to default Community/Org if not present (Logic can be improved later)
         # For now, linking to Evara HQ default
+        from datetime import datetime
         user_in = schemas.UserCreate(
             id=supabase_id,
             email=email,
@@ -49,6 +50,7 @@ async def sync_user_profile(
             community_id="comm_myhome"  # Default community for new users
         )
         attrs = user_in.model_dump()
+        attrs['created_at'] = datetime.utcnow()  # Add created_at
         user = await repo.create(attrs)
     else:
         # Update existing user metadata if needed

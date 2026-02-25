@@ -12,8 +12,23 @@ if db_url and db_url.startswith("postgres://"):
 
 engine = create_async_engine(
     db_url,
-    echo=True, # Set to False in production
-    future=True
+    echo=False, # Set to False in production
+    future=True,
+    pool_pre_ping=True,
+    pool_size=getattr(settings, 'DATABASE_POOL_SIZE', 5),
+    max_overflow=getattr(settings, 'DATABASE_MAX_OVERFLOW', 10),
+    pool_timeout=getattr(settings, 'DATABASE_POOL_TIMEOUT', 30),
+    connect_args={
+        "timeout": 30,
+        "command_timeout": 60,
+        "server_settings": {
+            "application_name": "evara_backend",
+            "connect_timeout": "30",
+            "statement_timeout": "60000"
+        },
+        "statement_cache_size": 0,  # Fix for pgbouncer duplicate statement error
+        "prepared_statement_cache_size": 0  # Additional fix
+    } if "postgresql" in db_url else {}
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -37,9 +52,15 @@ async def create_tables():
     from app.models.all_models import Base as ModelsBase
     import asyncio
     try:
-        # Strict 5-second timeout to prevent startup hang on blocked networks
-        async with asyncio.timeout(5):
+        # 30-second timeout for Supabase connection
+        print("🔗 Attempting to connect to database...")
+        async with asyncio.timeout(30):
             async with engine.begin() as conn:
                 await conn.run_sync(ModelsBase.metadata.create_all)
-    except (asyncio.TimeoutError, Exception) as e:
-        print(f"⚠️ DATABASE UNREACHABLE (TIMEOUT): {e}")
+        print("✅ Database tables created successfully")
+    except asyncio.TimeoutError:
+        print("⚠️ DATABASE ERROR: Connection timeout (30s)")
+        print("🔄 Backend will continue without creating tables")
+    except Exception as e:
+        print(f"⚠️ DATABASE ERROR: {e}")
+        print("🔄 Backend will continue without creating tables")

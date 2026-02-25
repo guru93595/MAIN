@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.db.session import get_db
 import httpx
+import asyncio
 
 router = APIRouter()
 
@@ -18,19 +19,33 @@ async def health_check(
     """
     status = {
         "status": "ok",
+        "service": "EvaraTech Backend",
+        "database": "unreachable",
         "services": {
             "database": "unknown",
             "thingspeak": "unknown"
         }
     }
     
-    # 1. DB Check
+    # 1. DB Check with timeout
     try:
-        await db.execute(text("SELECT 1"))
+        await asyncio.wait_for(
+            db.execute(text("SELECT 1")),
+            timeout=5.0
+        )
         status["services"]["database"] = "ok"
+        status["database"] = "ok"
+        print("✅ Database health check passed")
+    except asyncio.TimeoutError:
+        status["services"]["database"] = "timeout"
+        status["database"] = "timeout"
+        status["status"] = "degraded"
+        print("⚠️ Database health check timeout")
     except Exception as e:
         status["services"]["database"] = f"error: {str(e)}"
+        status["database"] = "error"
         status["status"] = "degraded"
+        print(f"❌ Database health check failed: {e}")
 
     # 2. ThingSpeak Check (Ping URL)
     try:
@@ -43,6 +58,7 @@ async def health_check(
     except Exception as e:
         status["services"]["thingspeak"] = f"error: {str(e)}"
         # ThingSpeak down might not be critical for app UP, but is for telemetry
-        status["status"] = "degraded"
+        if status["status"] == "ok":
+            status["status"] = "degraded"
 
     return status

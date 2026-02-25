@@ -85,6 +85,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default="customer") # superadmin, distributor, customer
+    plan: Mapped[str] = mapped_column(String, default="base") # base, plus, pro
     community_id: Mapped[str] = mapped_column(String, nullable=True)
     organization_id: Mapped[str] = mapped_column(String, nullable=True)
     
@@ -106,6 +107,13 @@ class Node(Base):
     lng: Mapped[float] = mapped_column(Float, nullable=True, name="long")
     status: Mapped[str] = mapped_column(String, default="provisioning")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Additional fields for frontend
+    location_name: Mapped[str] = mapped_column(String, nullable=True)
+    capacity: Mapped[str] = mapped_column(String, nullable=True)
+    thingspeak_channel_id: Mapped[str] = mapped_column(String, nullable=True)
+    thingspeak_read_api_key: Mapped[str] = mapped_column(String, nullable=True)
+    created_by: Mapped[str] = mapped_column(String, nullable=True)
     
     # Tenancy
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
@@ -172,3 +180,39 @@ class AuditLog(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
     user = relationship("User", back_populates="audit_logs")
+
+# ─── ADDITIONAL MODELS FOR COMPLETE FUNCTIONALITY ───
+
+class NodeAssignment(Base):
+    __tablename__ = "node_assignments"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users_profiles.id"))
+    assigned_by: Mapped[str] = mapped_column(ForeignKey("users_profiles.id"), nullable=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class Pipeline(Base):
+    __tablename__ = "pipelines"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    color: Mapped[str] = mapped_column(String, default="#000000")
+    positions: Mapped[dict] = mapped_column(JSON, nullable=True)  # Array of [lat, lng]
+    created_by: Mapped[str] = mapped_column(ForeignKey("users_profiles.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class NodeAnalytics(Base):
+    __tablename__ = "node_analytics"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"))
+    period_type: Mapped[str] = mapped_column(String)  # hourly, daily, weekly, monthly
+    period_start: Mapped[datetime] = mapped_column(DateTime)
+    consumption_liters: Mapped[float] = mapped_column(Float, nullable=True)
+    avg_level_percent: Mapped[float] = mapped_column(Float, nullable=True)
+    peak_flow: Mapped[float] = mapped_column(Float, nullable=True)
+    analytics_metadata: Mapped[dict] = mapped_column(JSON, nullable=True, name="metadata")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

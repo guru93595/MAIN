@@ -68,6 +68,8 @@ async def log_requests(request, call_next):
     method = request.method
     auth = request.headers.get("Authorization", "No Auth")
     
+    print(f"--> INCOMING: {method} {path} | Client IP: {request.client.host}")
+    
     response = await call_next(request)
     
     process_time = (time.time() - start_time) * 1000
@@ -98,14 +100,17 @@ async def health_check():
     from sqlalchemy import text
     from app.db.session import engine
     import asyncio
-    db_status = "ok"
+    db_status = "unreachable"
     try:
-        # 2s timeout for health check ping
-        async with asyncio.timeout(2):
-            async with engine.connect() as conn:
+        # 5s timeout for health check ping with proper async connection
+        async with asyncio.timeout(5):
+            async with engine.begin() as conn:
                 await conn.execute(text("SELECT 1"))
-    except Exception:
-        db_status = "unreachable"
+                db_status = "ok"
+    except asyncio.TimeoutError:
+        db_status = "timeout"
+    except Exception as e:
+        db_status = f"error: {str(e)[:50]}"
         
     return {
         "status": "ok", 

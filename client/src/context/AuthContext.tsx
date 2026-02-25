@@ -62,15 +62,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         let mounted = true;
 
-        // 1. Check LocalStorage first for instant restore
+        // ─── CLEANUP OLD DEV-BYPASS DATA ON STARTUP ───
+        const cleanupDevBypass = () => {
+            try {
+                const stored = localStorage.getItem(SESSION_KEY);
+                if (stored) {
+                    const { user: storedUser } = JSON.parse(stored);
+                    if (storedUser?.id && storedUser.id.startsWith('dev-bypass-')) {
+                        console.log('Cleaning up old dev-bypass session on startup');
+                        localStorage.removeItem(SESSION_KEY);
+                    }
+                }
+            } catch (e) {
+                console.error('Error during cleanup:', e);
+            }
+        };
+
+        // Clean up immediately
+        cleanupDevBypass();
+
+        // 1. Check LocalStorage first for instant restore (but filter out dev-bypass)
         const tryRestoreSession = () => {
             try {
                 const stored = localStorage.getItem(SESSION_KEY);
                 if (stored) {
                     const { user: storedUser, timestamp } = JSON.parse(stored);
                     const age = Date.now() - timestamp;
+                    
+                    // Filter out dev-bypass users
+                    if (storedUser?.id && storedUser.id.startsWith('dev-bypass-')) {
+                        console.log('Removing old dev-bypass session from localStorage');
+                        localStorage.removeItem(SESSION_KEY);
+                        return false;
+                    }
+                    
                     if (age < SESSION_DURATION) {
-                        console.log('Restoring session from localStorage');
+                        console.log('Restoring valid session from localStorage');
                         setUser(storedUser);
                         setLoading(false);
                         return true; // Session restored
@@ -148,77 +175,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const login = useCallback(async (
         email: string, password: string
     ): Promise<{ success: boolean; error?: string }> => {
-        // ─── DEV BYPASS ───
-        const DEV_ADMINS = ['ritik@evaratech.com', 'yasha@evaratech.com', 'aditya@evaratech.com', 'admin@evara.com'];
-        if (DEV_ADMINS.includes(email) && password === 'evaratech@1010') {
-            const mockUser: User = {
-                id: 'dev-bypass-usr_admin',
-                email,
-                displayName: 'Dev SuperAdmin',
-                role: 'superadmin',
-                plan: 'pro'
-            };
-            setUser(mockUser);
-            localStorage.setItem(SESSION_KEY, JSON.stringify({
-                user: mockUser,
-                timestamp: Date.now()
-            }));
+        // ─── DEV BYPASS DISABLED ───
+        // Using only real Supabase authentication
+        
+        console.log('AuthContext: Attempting Supabase login with:', { email, passwordLength: password.length });
+        
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            
+            console.log('AuthContext: Supabase response:', { data: data?.user ? 'User found' : 'No user', error: error?.message });
+            
+            if (error) {
+                console.error('AuthContext: Supabase login error:', error);
+                
+                // Provide specific error messages
+                if (error.message.includes('Invalid login credentials')) {
+                    return { success: false, error: 'Incorrect email or password.' };
+                } else if (error.message.includes('Email not confirmed')) {
+                    return { success: false, error: 'Please confirm your email address.' };
+                } else if (error.message.includes('Bad Request')) {
+                    return { success: false, error: 'Invalid login credentials. Please check your email and password.' };
+                } else {
+                    return { success: false, error: error.message };
+                }
+            }
+            
+            if (!data.user) {
+                console.error('AuthContext: No user data returned');
+                return { success: false, error: 'Login failed: No user data returned.' };
+            }
+
+            console.log('AuthContext: Login successful, syncing with backend...');
+            
+            // Ensure backend has this user (Supabase stores session in localStorage; api interceptor will send it)
             await syncWithBackend();
+            
+            console.log('AuthContext: Backend sync completed');
             return { success: true };
+            
+        } catch (err) {
+            console.error('AuthContext: Unexpected login error:', err);
+            return { success: false, error: 'An unexpected error occurred during login.' };
         }
-
-        // ─── DISTRIBUTOR 1 BYPASS ───
-        if (email === 'distributor@evara.com' && password === 'evaratech@1010') {
-            const mockUser: User = {
-                id: 'dev-bypass-distributor',
-                email,
-                displayName: 'Distributor One',
-                role: 'distributor',
-                plan: 'pro'
-            };
-            setUser(mockUser);
-            localStorage.setItem(SESSION_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
-            await syncWithBackend();
-            return { success: true };
-        }
-
-        // ─── DISTRIBUTOR 2 BYPASS ───
-        if (email === 'distributor2@evara.com' && password === 'evaratech@1010') {
-            const mockUser: User = {
-                id: 'dev-bypass-distributor-2',
-                email,
-                displayName: 'Distributor Two',
-                role: 'distributor',
-                plan: 'pro'
-            };
-            setUser(mockUser);
-            localStorage.setItem(SESSION_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
-            await syncWithBackend();
-            return { success: true };
-        }
-
-        // ─── CUSTOMER PLAN BYPASS ───
-        if (email.startsWith('customer.') && email.endsWith('@evara.com') && password === 'evaratech@1010') {
-            const plan = email.split('.')[1].split('@')[0] as UserPlan; // Extract 'base', 'plus', 'pro'
-            const mockUser: User = {
-                id: 'dev-bypass-' + plan,
-                email,
-                displayName: `Dev Customer (${plan.toUpperCase()})`,
-                role: 'customer',
-                plan: plan
-            };
-            setUser(mockUser);
-            localStorage.setItem(SESSION_KEY, JSON.stringify({ user: mockUser, timestamp: Date.now() }));
-            await syncWithBackend();
-            return { success: true };
-        }
-
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error || !data.user) return { success: false, error: error?.message ?? 'Sign-in failed' };
-
-        // Ensure backend has this user (Supabase stores session in localStorage; api interceptor will send it)
-        await syncWithBackend();
-        return { success: true };
     }, []);
 
     const signup = useCallback(async (

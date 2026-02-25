@@ -16,6 +16,10 @@ import { getSystemHealth, type SystemHealth } from '../services/dashboard';
 import { getActiveAlerts, type AlertHistory } from '../services/alerts';
 import api from '../services/api';
 import { useTelemetry } from '../hooks/useTelemetry';
+import { CompleteDashboard } from '../components/CompleteDashboard';
+import { TestDataFetch } from '../components/TestDataFetch';
+import { AuthDebug } from '../components/AuthDebug';
+import { DevLogin } from '../components/DevLogin';
 
 function SyncAccountButton({ onSync }: { onSync: () => void }) {
     const [syncing, setSyncing] = useState(false);
@@ -219,6 +223,7 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [now] = useState(() => new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
     const [isNavigating, setIsNavigating] = useState(false);
+    const [activeTab, setActiveTab] = useState<'overview' | 'complete'>('overview');
 
     const [health, setHealth] = useState<SystemHealth | null>(null);
     const [activeAlerts, setActiveAlerts] = useState<AlertHistory[]>([]);
@@ -229,9 +234,9 @@ const Dashboard = () => {
     }, []);
 
     // Derived stats from Nodes (Real-time)
-    const tanks = nodes.filter(n => ['OHT', 'Sump', 'PumpHouse'].includes(n.category));
-    const flow = nodes.filter(n => n.category === 'FlowMeter');
-    const borewells = nodes.filter(n => ['Borewell', 'GovtBorewell'].includes(n.category));
+    const tanks = nodes.filter(n => (n.analytics_type || '') === 'EvaraTank');
+    const flow = nodes.filter(n => (n.analytics_type || '') === 'EvaraFlow');
+    const borewells = nodes.filter(n => (n.analytics_type || '') === 'EvaraDeep');
 
     const localStats = {
         tanks: { active: tanks.filter(n => n.status === 'Online').length, total: tanks.length },
@@ -303,9 +308,42 @@ const Dashboard = () => {
                 <span className="text-base font-semibold text-slate-400">Last updated: <span className="text-slate-600">{now}</span></span>
             </div>
 
-            {/* ── Top Row ── */}
-            {/* Reduced height to 250px for strict no-scroll */}
-            <div className="flex-none grid grid-cols-12 gap-4 mb-4" style={{ height: '250px' }}>
+            {/* ── Tab Navigation ── */}
+            <div className="flex-none mb-5">
+                <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === 'overview'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        Overview
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('complete')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === 'complete'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        Complete Data
+                    </button>
+                </div>
+            </div>
+
+            {/* ── Tab Content ── */}
+            {activeTab === 'complete' ? (
+                <div className="flex-1 overflow-auto">
+                    <CompleteDashboard />
+                </div>
+            ) : (
+                <>
+                    {/* ── Top Row ── */}
+                    {/* Reduced height to 250px for strict no-scroll */}
+                    <div className="flex-none grid grid-cols-12 gap-4 mb-4" style={{ height: '250px' }}>
 
                 {/* Left 8 cols: stacked KPI rows */}
                 <div className="col-span-8 flex flex-col gap-4 h-full">
@@ -376,21 +414,21 @@ const Dashboard = () => {
                     {/* Row 2 — 4 device-type counters */}
                     <div className="flex-1 grid grid-cols-4 gap-4">
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Tanks</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraTank</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-4xl font-extrabold text-blue-600">{localStats.tanks.active}</span>
                                 <span className="text-2xl font-bold text-slate-300">/{localStats.tanks.total}</span>
                             </div>
                         </div>
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Flow</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraFlow</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-4xl font-extrabold text-cyan-600">{localStats.flow.active}</span>
                                 <span className="text-2xl font-bold text-slate-300">/{localStats.flow.total}</span>
                             </div>
                         </div>
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Deep</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraDeep</span>
                             <div className="flex items-baseline gap-1">
                                 <span className="text-4xl font-extrabold text-purple-600">{localStats.deep.active}</span>
                                 <span className="text-2xl font-bold text-slate-300">/{localStats.deep.total}</span>
@@ -535,6 +573,8 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
+                </>
+            )}
         </div>
     );
 };

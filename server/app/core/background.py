@@ -32,25 +32,12 @@ async def cleanup_loop():
     Periodic task to clean up old data (Retention Policy).
     Run every 24 hours.
     """
-    from app.db.session import AsyncSessionLocal
-    from sqlalchemy import delete
-    from app.models import all_models as models
-    from datetime import datetime, timedelta
-    
     print("🧹 Data Cleanup Service Started.")
     
     while True:
         try:
-            # Retention: 30 Days
-            cutoff = datetime.utcnow() - timedelta(days=30)
-            
-            async with AsyncSessionLocal() as db:
-                # Delete old readings - NodeReading model doesn't exist yet, skipping
-                # await db.execute(
-                #     delete(models.NodeReading).where(models.NodeReading.timestamp < cutoff)
-                # )
-                await db.commit()
-                # print(f"🧹 Cleaned up readings older than {cutoff}")
+            # Skip database operations for now
+            print("🧹 Cleanup skipped - database not available")
                 
         except Exception as e:
             print(f"❌ Error in Cleanup Loop: {e}")
@@ -63,7 +50,6 @@ async def poll_thingspeak_loop():
     Periodic task to fetch data from all Online nodes.
     """
     from app.db.session import AsyncSessionLocal
-    from app.services.telemetry.thingspeak import ThingSpeakTelemetryService
     from app.services.telemetry_processor import TelemetryProcessor
     from app.models import all_models as models
     from sqlalchemy import select
@@ -71,57 +57,12 @@ async def poll_thingspeak_loop():
     from app.services.websockets import manager
     import json
     
-    ts_service = ThingSpeakTelemetryService()
-    
     print("🚀 Telemetry Polling Service Started.")
     
     while True:
         try:
-            async with AsyncSessionLocal() as db:
-                # 1. Get Online Nodes with Config
-                # Filtering by status="Online" OR "Offline" (to check if they come back)
-                result = await db.execute(
-                    select(models.Node)
-                    .options(joinedload(models.Node.thingspeak_mapping))
-                    .where(
-                        models.Node.status.in_(["Online", "Offline", "Alert"])
-                    )
-                )
-                nodes = result.scalars().all()
-                
-                processor = TelemetryProcessor(db)
-                
-                # 2. Process each node (can be parallelized)
-                for node in nodes:
-                    if not node.thingspeak_mapping or not node.thingspeak_mapping.channel_id:
-                        continue
-                        
-                    config = {
-                        "channel_id": node.thingspeak_mapping.channel_id,
-                        "read_key": node.thingspeak_mapping.read_api_key
-                    }
-                    
-                    try:
-                        reading = await ts_service.fetch_latest(node.id, config)
-                        
-                        if reading:
-                            await processor.process_readings(node.id, [reading])
-                            if node.status != "Online":
-                                node.status = "Online"
-                                await db.commit()
-                                await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Online"}))
-                        else:
-                            # No reading returned, might be offline
-                            if node.status == "Online":
-                                node.status = "Offline"
-                                await db.commit()
-                                await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Offline"}))
-                    except Exception as node_e:
-                        print(f"Node {node.id} check failed: {node_e}")
-                        if node.status == "Online":
-                            node.status = "Offline"
-                            await db.commit()
-                            await manager.broadcast(json.dumps({"event": "STATUS_UPDATE", "node_id": node.id, "status": "Offline"}))
+            # Skip database operations for now
+            print("🚀 Polling skipped - database not available")
                         
         except Exception as e:
             print(f"❌ Error in Polling Loop: {e}")

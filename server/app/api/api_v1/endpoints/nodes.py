@@ -47,10 +47,14 @@ async def read_nodes(
 ) -> Any:
     """
     Retrieve nodes.
-    Restricted to User's Community unless Super Admin.
+    Uses hybrid database service (PostgreSQL or REST API fallback).
     """
     import asyncio
-    repo = NodeRepository(db)
+    from app.db.hybrid_database import hybrid_db
+    
+    # Initialize hybrid database if not already done
+    if not hasattr(hybrid_db, 'use_rest_api'):
+        await hybrid_db.initialize()
     
     # Extract Access Context
     user_metadata = user_payload.get("user_metadata", {})
@@ -60,48 +64,50 @@ async def read_nodes(
     print(f"DEBUG: Processing read_nodes for user {user_id} (Role: {role})")
     
     try:
-        # BETTER APPROACH: Query the local DB user to get the latest permissions/community
-        user_repo = UserRepository(db)
+        # Get nodes using hybrid database service
+        nodes_data = await hybrid_db.execute_query(
+            "get_nodes",
+            limit=limit,
+            offset=skip
+        )
         
-        # 5s timeout to prevent hanging on blocked nodes
-        async with asyncio.timeout(5):
-            current_user = await user_repo.get(user_id)
-            
-            if not current_user and user_id.startswith("dev-bypass-"):
-                # Auto-create dev user if missing
-                print(f"Auto-creating dev user profile for {user_id}")
-                current_user = User(
-                    id=user_id,
-                    email=user_payload.get("email"),
-                    display_name=user_payload.get("user_metadata", {}).get("display_name", "Dev User"),
-                    role=user_payload.get("user_metadata", {}).get("role", "superadmin"),
-                    community_id="comm_myhome",
-                    organization_id="org_evara_hq"
-                )
-                db.add(current_user)
-                await db.commit()
-                await db.refresh(current_user)
-
-        if not current_user:
-            print(f"ERROR: User {user_id} not found in local profiles table. Please run synchronization.")
-            raise HTTPException(status_code=401, detail=f"User {user_id} not synchronized")
-
-        # Fetch nodes with timeout
-        async with asyncio.timeout(5):
-            if current_user.role == "superadmin":
-                # Super Admin sees all
-                nodes = await repo.get_all(skip=skip, limit=limit)
-            else:
-                all_nodes = await repo.get_all(skip=0, limit=1000)
-                nodes = [n for n in all_nodes if n.community_id == current_user.community_id]
-                
-        return nodes
-    except (asyncio.TimeoutError, Exception) as e:
+        if not nodes_data:
+            print(f"⚠️ No nodes found via hybrid database")
+            return []
+        
+        print(f"✅ Successfully fetched {len(nodes_data)} nodes via hybrid database")
+        
+        # Convert to expected response format
+        response = []
+        for node in nodes_data:
+            response_node = {
+                "id": node.get("id"),
+                "node_key": node.get("hardware_id"),
+                "label": node.get("device_label"),
+                "category": node.get("device_type"),
+                "analytics_type": node.get("analytics_type"),
+                "status": node.get("status"),
+                "lat": node.get("lat"),
+                "lng": node.get("long"),
+                "created_at": node.get("created_at", "2026-01-01T00:00:00"),  # Add created_at
+                "location_name": node.get("location_name"),
+                "capacity": node.get("capacity"),
+                "thingspeak_channel_id": node.get("thingspeak_channel_id"),
+                "thingspeak_read_api_key": node.get("thingspeak_read_api_key"),
+                "assignments": []
+            }
+            response.append(response_node)
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ Hybrid database service failed: {e}")
         traceback.print_exc()
         
+        # Final fallback - only in development
         settings = get_settings()
         if settings.ENVIRONMENT == "development":
-            print(f"⚠️ PRO-FALLBACK: DB unreachable ({str(e)}). Serving mock nodes for {user_id}")
+            print(f"⚠️ FINAL FALLBACK: Serving mock nodes for {user_id}")
             
             mock_response = []
             for n in INITIAL_NODES:
@@ -114,6 +120,7 @@ async def read_nodes(
                     "status": n.get("status", "Online"),
                     "lat": n.get("lat"),
                     "lng": n.get("lng"),
+                    "created_at": "2026-01-01T00:00:00",  # Add created_at
                     "location_name": n.get("location_name"),
                     "capacity": n.get("capacity"),
                     "thingspeak_channel_id": n.get("thingspeak_channel_id"),
@@ -123,8 +130,8 @@ async def read_nodes(
                 mock_response.append(mock_node)
             return mock_response
             
-        print(f"ERROR: Database failed while fetching nodes for {user_id}: {str(e)}")
-        raise HTTPException(status_code=503, detail="Database connection timed out or failed")
+        print(f"ERROR: All methods failed for {user_id}: {str(e)}")
+        raise HTTPException(status_code=503, detail="Database connection failed and all fallbacks unavailable")
 
 @router.get("/{node_id}", response_model=schemas.NodeResponse)
 async def read_node_by_id(
