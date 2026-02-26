@@ -47,25 +47,91 @@ async def cleanup_loop():
 
 async def poll_thingspeak_loop():
     """
-    Periodic task to fetch data from all Online nodes.
+    Periodic task to fetch data from all ThingSpeak-enabled nodes.
     """
-    from app.db.session import AsyncSessionLocal
-    from app.services.telemetry_processor import TelemetryProcessor
-    from app.models import all_models as models
+    import httpx
+    import uuid
+    import asyncio
+    from datetime import datetime
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
-    from app.services.websockets import manager
-    import json
+    from app.db.session import AsyncSessionLocal
+    from app.models.all_models import Node, NodeAnalytics
     
     print("🚀 Telemetry Polling Service Started.")
     
+    # Wait a few seconds for the app to start up before initial poll
+    await asyncio.sleep(5)
+    
     while True:
         try:
-            # Skip database operations for now
-            print("🚀 Polling skipped - database not available")
+            async with AsyncSessionLocal() as session:
+                # Get all nodes that have a thingspeak channel configured
+                result = await session.execute(
+                    select(Node).where(Node.thingspeak_channel_id.isnot(None))
+                )
+                nodes = result.scalars().all()
+                
+                if not nodes:
+                    print("🚀 Polling: No nodes with thingspeak_channel_id found.")
+                
+                async with httpx.AsyncClient() as client:
+                    for node in nodes:
+                        if not node.thingspeak_channel_id:
+                            continue
+                            
+                        url = f"https://api.thingspeak.com/channels/{node.thingspeak_channel_id}/feeds.json"
+                        params = {"results": 1}
+                        if node.thingspeak_read_api_key:
+                            params["api_key"] = node.thingspeak_read_api_key
+                            
+                        try:
+                            response = await client.get(url, params=params, timeout=10.0)
+                            if response.status_code == 200:
+                                data = response.json()
+                                feeds = data.get("feeds", [])
+                                if not feeds:
+                                    continue
+                                    
+                                feed = feeds[0]
+                                
+                                # Process the metrics (assuming field1 = level/flow based on analytics type)
+                                try:
+                                    val = float(feed.get("field1", 0))
+                                except (ValueError, TypeError):
+                                    val = 0.0
+                                    
+                                peak_flow = val if node.analytics_type == "EvaraFlow" else 0.0
+                                avg_level = val if node.analytics_type in ["EvaraTank", "EvaraDeep"] else 0.0
+                                consumption = avg_level * 10 # Mock consumption calculation
+                                
+                                now = datetime.utcnow()
+                                period_start = now.replace(minute=0, second=0, microsecond=0) # Hourly
+                                
+                                # In MVP, we can insert an hourly analytical reading.
+                                # To avoid spamming, we could check if one already exists for this hour, 
+                                # but for demonstration of charts we'll just insert a fresh one or daily one.
+                                
+                                analytics_entry = NodeAnalytics(
+                                    id=str(uuid.uuid4()),
+                                    node_id=node.id,
+                                    period_type="daily", # Dashboard uses daily by default
+                                    period_start=now.replace(hour=0, minute=0, second=0, microsecond=0),
+                                    consumption_liters=consumption,
+                                    avg_level_percent=avg_level,
+                                    peak_flow=peak_flow,
+                                    analytics_metadata={"raw_feed": feed}
+                                )
+                                session.add(analytics_entry)
+                                print(f"✅ Ingested ThingSpeak data for node {node.id}")
+                            else:
+                                print(f"⚠️ ThingSpeak returned {response.status_code} for node {node.id}")
+                        except Exception as req_e:
+                            print(f"❌ Error requesting ThingSpeak for {node.id}: {req_e}")
+                            
+                await session.commit()
                         
         except Exception as e:
             print(f"❌ Error in Polling Loop: {e}")
             
-        # Wait 60 seconds
+        # Wait 60 seconds before next poll
         await asyncio.sleep(60)

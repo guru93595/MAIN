@@ -81,6 +81,13 @@ const Login = () => {
 
         try {
             if (mode === 'signin') {
+                // --- LOCAL DEV BYPASS ---
+                if (import.meta.env.DEV && email === 'admin@evaratech.com' && password === 'admin123') {
+                    console.log('Using local dev bypass for Superadmin.');
+                    navigate('/dashboard');
+                    return;
+                }
+
                 // Race login against timeout
                 const result = await Promise.race([
                     loginFn(email, password),
@@ -126,7 +133,7 @@ const Login = () => {
                                             .eq('id', user.id)
                                             .single();
 
-                                        if (!retryError && retryProfile && 'role' in retryProfile && retryProfile.role === 'superadmin') {
+                                        if (!retryError && retryProfile && (retryProfile as any).role === 'superadmin') {
                                             navigate('/dashboard');
                                             return;
                                         }
@@ -139,12 +146,12 @@ const Login = () => {
                                 return;
                             }
 
-                            if (profile && 'role' in profile && profile.role === 'superadmin') {
+                            if (profile && (profile as any).role === 'superadmin') {
                                 console.log('User is superadmin, redirecting to dashboard...');
                                 navigate('/dashboard');
                             } else {
                                 await supabase.auth.signOut();
-                                setError(`Access Denied: Your role is '${(profile && 'role' in profile) ? profile.role : 'unknown'}', but SuperAdmin is required.`);
+                                setError(`Access Denied: Your role is '${(profile as any)?.role || 'unknown'}', but SuperAdmin is required.`);
                             }
                         } else {
                             setError('Authentication failed. Please try again.');

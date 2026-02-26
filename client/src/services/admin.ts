@@ -21,13 +21,41 @@ export const adminService = {
         return response.data;
     },
 
-    async createCustomer(data: { name: string; email: string; community_id: string; password?: string; contact_number?: string }) {
+    async createCustomer(data: {
+        full_name: string;
+        email: string;
+        community_id: string;
+        password?: string;
+        contact_number?: string;
+        city?: string;
+        company_name?: string;
+    }) {
         const response = await api.post('/customers/onboard', data);
         return response.data;
     },
 
-    async createDevice(data: { hardware_id: string; type: string }) {
-        const response = await api.post('/nodes/', data);
+    async createDevice(data: {
+        hardware_id: string;
+        device_label: string;
+        device_type: string;
+        analytics_type: string;
+        community_id?: string;
+        customer_id?: string;
+        lat?: number;
+        long?: number;
+        thingspeak_mappings?: any[];
+    }) {
+        const response = await api.post('/nodes', data);
+        return response.data;
+    },
+
+    async updateDevice(id: string, data: any) {
+        const response = await api.put(`/nodes/${id}`, data);
+        return response.data;
+    },
+
+    async deleteDevice(id: string) {
+        const response = await api.delete(`/nodes/${id}`);
         return response.data;
     },
 

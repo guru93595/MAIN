@@ -62,6 +62,8 @@ class CustomerBase(BaseModel):
     community_id: Optional[str] = None
     distributor_id: Optional[str] = None
     plan_id: Optional[str] = None
+    city: Optional[str] = None
+    company_name: Optional[str] = None
     status: str = "active"
 
 class CustomerCreate(CustomerBase):
@@ -103,19 +105,31 @@ class NodeBase(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = Field(None, alias="long")
 
+    class Config:
+        populate_by_name = True
+
 class NodeCreate(NodeBase):
     customer_id: Optional[str] = None
     community_id: Optional[str] = None
     distributor_id: Optional[str] = None
+    
+    # Missing fields from IIIT H
+    sampling_rate: Optional[int] = 60
+    threshold_low: Optional[float] = 20.0
+    threshold_high: Optional[float] = 90.0
+    sms_enabled: bool = False
+    dashboard_visible: bool = True
+    logic_inverted: bool = False
+    is_individual: bool = False
+    metrics_config: Optional[Dict[str, Any]] = None
+
     # Specialized Configs (Optional during creation)
     config_tank: Optional[Dict[str, Any]] = None
     config_deep: Optional[Dict[str, Any]] = None
     config_flow: Optional[Dict[str, Any]] = None
     
     # Telemetry Mapping
-    thingspeak_mapping: Optional[Dict[str, Any]] = None
-
-    thingspeak_mapping: Optional[Dict[str, Any]] = None
+    thingspeak_mappings: Optional[List[Dict[str, Any]]] = None
 
 class NodeSummary(BaseModel):
     id: str
@@ -128,6 +142,39 @@ class NodeSummary(BaseModel):
     class Config:
         from_attributes = True
 
+class ThingSpeakMappingBase(BaseModel):
+    channel_id: Optional[str] = None
+    read_api_key: Optional[str] = None
+    write_api_key: Optional[str] = None
+    field_mapping: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+class DeviceConfigTankBase(BaseModel):
+    capacity: Optional[int] = None
+    max_depth: Optional[float] = None
+    temp_enabled: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
+class DeviceConfigDeepBase(BaseModel):
+    static_depth: Optional[float] = None
+    dynamic_depth: Optional[float] = None
+    recharge_threshold: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+class DeviceConfigFlowBase(BaseModel):
+    max_flow_rate: Optional[float] = None
+    pipe_diameter: Optional[float] = None
+    abnormal_threshold: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
 class NodeResponse(NodeBase):
     id: str
     created_at: datetime
@@ -135,13 +182,22 @@ class NodeResponse(NodeBase):
     community_id: Optional[str] = None
     distributor_id: Optional[str] = None
     
+    # Flat ThingSpeak fields (from Node model)
+    thingspeak_channel_id: Optional[str] = None
+    thingspeak_read_api_key: Optional[str] = None
+    
+    # Display fields
+    location_name: Optional[str] = None
+    capacity: Optional[str] = None
+    created_by: Optional[str] = None
+    
     # Specialized Configs
-    config_tank: Optional[Dict[str, Any]] = None
-    config_deep: Optional[Dict[str, Any]] = None
-    config_flow: Optional[Dict[str, Any]] = None
+    config_tank: Optional[DeviceConfigTankBase] = None
+    config_deep: Optional[DeviceConfigDeepBase] = None
+    config_flow: Optional[DeviceConfigFlowBase] = None
     
     # Telemetry Mapping
-    thingspeak_mapping: Optional[Dict[str, Any]] = None
+    thingspeak_mappings: Optional[List[ThingSpeakMappingBase]] = None
 
     class Config:
         from_attributes = True
@@ -213,6 +269,15 @@ class SimpleNodeResponse(BaseModel):
     thingspeak_channel_id: Optional[str] = None
     thingspeak_read_api_key: Optional[str] = None
     created_by: Optional[str] = None
+    
+    # IIIT H specific
+    sampling_rate: Optional[int] = None
+    threshold_low: Optional[float] = None
+    threshold_high: Optional[float] = None
+    sms_enabled: Optional[bool] = None
+    dashboard_visible: Optional[bool] = None
+    logic_inverted: Optional[bool] = None
+    is_individual: Optional[bool] = None
     
     class Config:
         from_attributes = True

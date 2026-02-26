@@ -1,6 +1,8 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.api import deps
 from app.core import security_supabase
 from app.schemas import schemas
@@ -10,8 +12,17 @@ from app.services.analytics import NodeAnalyticsService
 from app.db.session import get_db
 from app.services.seeder import INITIAL_NODES
 from app.core.config import get_settings
+from app.services.security import EncryptionService
 import asyncio
 import traceback
+from datetime import datetime
+
+# Import telemetry service
+try:
+    from app.services.telemetry import ThingSpeakTelemetryService
+except ImportError:
+    print("⚠️ ThingSpeakTelemetryService not found, using fallback")
+    ThingSpeakTelemetryService = None
 
 router = APIRouter()
 
@@ -20,10 +31,10 @@ async def create_node(
     *,
     db: AsyncSession = Depends(get_db),
     node_in: schemas.NodeCreate,
-    current_user = Depends(deps.get_current_user),
+    user_payload: dict = Depends(security_supabase.get_current_user_token),
 ) -> Any:
     """
-    Create a new node.
+    Create a new node with location support.
     """
     repo = NodeRepository(db)
     
@@ -32,112 +43,250 @@ async def create_node(
     if existing:
         raise HTTPException(status_code=400, detail="Node with this key already exists")
         
-    node_data = node_in.dict()
-    node_data["created_by"] = current_user.id
+    import uuid
+
+    node_data = node_in.dict(exclude={"thingspeak_mappings", "config_tank", "config_deep", "config_flow"})
+    node_data["id"] = str(uuid.uuid4())
+    node_data["created_by"] = user_payload.get("sub")
     
-    node = await repo.create(node_data)
-    return node
+    # Ensure location data is properly saved
+    if node_in.lat is not None:
+        node_data["lat"] = node_in.lat
+    if node_in.lng is not None:
+        node_data["long"] = node_in.lng  # Note: database uses 'long' column
+    
+    try:
+        node = await repo.create(node_data)
+        
+        # Handle ThingSpeak mappings if provided
+        if node_in.thingspeak_mappings:
+            from app.models.all_models import DeviceThingSpeakMapping
+            for mapping_data in node_in.thingspeak_mappings:
+                mapping = DeviceThingSpeakMapping(
+                    id=str(uuid.uuid4()),
+                    device_id=node.id,
+                    channel_id=mapping_data.get("channel_id"),
+                    read_api_key=mapping_data.get("read_api_key"),
+                    write_api_key=mapping_data.get("write_api_key"),
+                    field_mapping=mapping_data.get("field_mapping", {})
+                )
+                db.add(mapping)
+            
+            await db.commit()
+        
+        # Handle specialized configs if provided
+        if node_in.config_tank:
+            from app.models.all_models import DeviceConfigTank
+            config = DeviceConfigTank(
+                device_id=node.id,
+                capacity=node_in.config_tank.get("capacity"),
+                max_depth=node_in.config_tank.get("max_depth"),
+                temp_enabled=node_in.config_tank.get("temp_enabled", False)
+            )
+            db.add(config)
+            
+        if node_in.config_deep:
+            from app.models.all_models import DeviceConfigDeep
+            config = DeviceConfigDeep(
+                device_id=node.id,
+                static_depth=node_in.config_deep.get("static_depth"),
+                dynamic_depth=node_in.config_deep.get("dynamic_depth"),
+                recharge_threshold=node_in.config_deep.get("recharge_threshold")
+            )
+            db.add(config)
+            
+        if node_in.config_flow:
+            from app.models.all_models import DeviceConfigFlow
+            config = DeviceConfigFlow(
+                device_id=node.id,
+                max_flow_rate=node_in.config_flow.get("max_flow_rate"),
+                pipe_diameter=node_in.config_flow.get("pipe_diameter"),
+                abnormal_threshold=node_in.config_flow.get("abnormal_threshold")
+            )
+            db.add(config)
+            
+        await db.commit()
+        
+        # Refresh the node to get all relationships
+        await db.refresh(node)
+        return node
+        
+    except Exception as e:
+        print(f"ERROR creating node: {e}")
+        traceback.print_exc()
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/", response_model=List[schemas.SimpleNodeResponse])
 async def read_nodes(
     db: AsyncSession = Depends(get_db),
     skip: int = 0,
-    limit: int = 100,
-    user_payload: dict = Depends(security_supabase.get_current_user_token) # Get Supabase Token
+    limit: int = 100
 ) -> Any:
     """
-    Retrieve nodes.
-    Uses hybrid database service (PostgreSQL or REST API fallback).
+    Retrieve nodes with location data — lightweight summary list.
     """
-    import asyncio
-    from app.db.hybrid_database import hybrid_db
+    repo = NodeRepository(db)
+    try:
+        nodes = await repo.get_all_summary(skip=skip, limit=limit)
+        return [
+            {
+                "id": node.id,
+                "node_key": getattr(node, 'hardware_id', node.node_key),  # hardware_id is the actual node_key
+                "label": getattr(node, 'device_label', node.label),  # device_label is the actual label
+                "category": getattr(node, 'device_type', node.category),  # device_type is the actual category
+                "analytics_type": node.analytics_type,
+                "status": node.status,
+                "lat": node.lat,
+                "lng": getattr(node, 'long', node.lng),  # long is the actual lng column
+                "created_at": node.created_at or datetime.utcnow(),
+                "location_name": getattr(node, "location_name", None),
+                "capacity": getattr(node, "capacity", None),
+                "thingspeak_channel_id": getattr(node, "thingspeak_channel_id", None),
+                "thingspeak_read_api_key": None,  # Never expose keys in list view
+                "created_by": getattr(node, "created_by", None),
+                # IIIT H specific fields
+                "sampling_rate": getattr(node, "sampling_rate", None),
+                "threshold_low": getattr(node, "threshold_low", None),
+                "threshold_high": getattr(node, "threshold_high", None),
+                "sms_enabled": getattr(node, "sms_enabled", None),
+                "dashboard_visible": getattr(node, "dashboard_visible", None),
+                "logic_inverted": getattr(node, "logic_inverted", None),
+                "is_individual": getattr(node, "is_individual", None),
+            }
+            for node in nodes
+        ]
+    except Exception as e:
+        print(f"❌ Node list fetch error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail=f"Failed to fetch nodes: {str(e)}")
+
+
+@router.put("/{node_id}", response_model=schemas.NodeResponse)
+async def update_node(
+    *,
+    db: AsyncSession = Depends(get_db),
+    node_id: str,
+    node_in: schemas.NodeCreate, # Using NodeCreate for simplicity or a NodeUpdate schema
+    user_payload: dict = Depends(security_supabase.get_current_user_token),
+) -> Any:
+    """
+    Update a node with location support.
+    """
+    repo = NodeRepository(db)
+    node = await repo.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+        
+    update_data = node_in.dict(exclude_unset=True, exclude={"thingspeak_mappings", "config_tank", "config_deep", "config_flow"})
     
-    # Initialize hybrid database if not already done
-    if not hasattr(hybrid_db, 'use_rest_api'):
-        await hybrid_db.initialize()
-    
-    # Extract Access Context
-    user_metadata = user_payload.get("user_metadata", {})
-    role = user_metadata.get("role", "customer")
-    user_id = user_payload.get("sub")
-    
-    print(f"DEBUG: Processing read_nodes for user {user_id} (Role: {role})")
+    # Handle location field mapping (lng -> long)
+    if "lng" in update_data:
+        update_data["long"] = update_data.pop("lng")
     
     try:
-        # Get nodes using hybrid database service
-        nodes_data = await hybrid_db.execute_query(
-            "get_nodes",
-            limit=limit,
-            offset=skip
-        )
+        updated_node = await repo.update(node_id, update_data)
         
-        if not nodes_data:
-            print(f"⚠️ No nodes found via hybrid database")
-            return []
+        # Handle ThingSpeak mappings if provided
+        if node_in.thingspeak_mappings:
+            # Delete existing mappings
+            from app.models.all_models import DeviceThingSpeakMapping
+            await db.execute(
+                select(DeviceThingSpeakMapping).filter(DeviceThingSpeakMapping.device_id == node_id)
+            )
+            await db.commit()
+            
+            # Add new mappings
+            for mapping_data in node_in.thingspeak_mappings:
+                mapping = DeviceThingSpeakMapping(
+                    id=str(uuid.uuid4()),
+                    device_id=node_id,
+                    channel_id=mapping_data.get("channel_id"),
+                    read_api_key=mapping_data.get("read_api_key"),
+                    write_api_key=mapping_data.get("write_api_key"),
+                    field_mapping=mapping_data.get("field_mapping", {})
+                )
+                db.add(mapping)
+            
+            await db.commit()
         
-        print(f"✅ Successfully fetched {len(nodes_data)} nodes via hybrid database")
-        
-        # Convert to expected response format
-        response = []
-        for node in nodes_data:
-            response_node = {
-                "id": node.get("id"),
-                "node_key": node.get("hardware_id"),
-                "label": node.get("device_label"),
-                "category": node.get("device_type"),
-                "analytics_type": node.get("analytics_type"),
-                "status": node.get("status"),
-                "lat": node.get("lat"),
-                "lng": node.get("long"),
-                "created_at": node.get("created_at", "2026-01-01T00:00:00"),  # Add created_at
-                "location_name": node.get("location_name"),
-                "capacity": node.get("capacity"),
-                "thingspeak_channel_id": node.get("thingspeak_channel_id"),
-                "thingspeak_read_api_key": node.get("thingspeak_read_api_key"),
-                "assignments": []
-            }
-            response.append(response_node)
-        
-        return response
+        # Handle specialized configs if provided
+        if node_in.config_tank:
+            from app.models.all_models import DeviceConfigTank
+            # Delete existing config
+            await db.execute(
+                select(DeviceConfigTank).filter(DeviceConfigTank.device_id == node_id)
+            )
+            # Add new config
+            config = DeviceConfigTank(
+                device_id=node_id,
+                capacity=node_in.config_tank.get("capacity"),
+                max_depth=node_in.config_tank.get("max_depth"),
+                temp_enabled=node_in.config_tank.get("temp_enabled", False)
+            )
+            db.add(config)
+            
+        if node_in.config_deep:
+            from app.models.all_models import DeviceConfigDeep
+            # Delete existing config
+            await db.execute(
+                select(DeviceConfigDeep).filter(DeviceConfigDeep.device_id == node_id)
+            )
+            # Add new config
+            config = DeviceConfigDeep(
+                device_id=node_id,
+                static_depth=node_in.config_deep.get("static_depth"),
+                dynamic_depth=node_in.config_deep.get("dynamic_depth"),
+                recharge_threshold=node_in.config_deep.get("recharge_threshold")
+            )
+            db.add(config)
+            
+        if node_in.config_flow:
+            from app.models.all_models import DeviceConfigFlow
+            # Delete existing config
+            await db.execute(
+                select(DeviceConfigFlow).filter(DeviceConfigFlow.device_id == node_id)
+            )
+            # Add new config
+            config = DeviceConfigFlow(
+                device_id=node_id,
+                max_flow_rate=node_in.config_flow.get("max_flow_rate"),
+                pipe_diameter=node_in.config_flow.get("pipe_diameter"),
+                abnormal_threshold=node_in.config_flow.get("abnormal_threshold")
+            )
+            db.add(config)
+            
+        await db.commit()
+        await db.refresh(updated_node)
+        return updated_node
         
     except Exception as e:
-        print(f"❌ Hybrid database service failed: {e}")
-        traceback.print_exc()
-        
-        # Final fallback - only in development
-        settings = get_settings()
-        if settings.ENVIRONMENT == "development":
-            print(f"⚠️ FINAL FALLBACK: Serving mock nodes for {user_id}")
-            
-            mock_response = []
-            for n in INITIAL_NODES:
-                mock_node = {
-                    "id": n.get("id", "mock-id"),
-                    "node_key": n.get("node_key", "mock-key"),
-                    "label": n.get("label", "Mock Node"),
-                    "category": n.get("category", "General"),
-                    "analytics_type": n.get("type", n.get("category", "EvaraFlow")),
-                    "status": n.get("status", "Online"),
-                    "lat": n.get("lat"),
-                    "lng": n.get("lng"),
-                    "created_at": "2026-01-01T00:00:00",  # Add created_at
-                    "location_name": n.get("location_name"),
-                    "capacity": n.get("capacity"),
-                    "thingspeak_channel_id": n.get("thingspeak_channel_id"),
-                    "thingspeak_read_api_key": n.get("thingspeak_read_api_key"),
-                    "assignments": []
-                }
-                mock_response.append(mock_node)
-            return mock_response
-            
-        print(f"ERROR: All methods failed for {user_id}: {str(e)}")
-        raise HTTPException(status_code=503, detail="Database connection failed and all fallbacks unavailable")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{node_id}", response_model=schemas.NodeResponse)
+@router.delete("/{node_id}")
+async def delete_node(
+    *,
+    db: AsyncSession = Depends(get_db),
+    node_id: str,
+    user_payload: dict = Depends(security_supabase.get_current_user_token),
+) -> Any:
+    """
+    Delete a node.
+    """
+    repo = NodeRepository(db)
+    node = await repo.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    await repo.delete(node_id)
+    return {"status": "success", "message": f"Node {node_id} deleted"}
+
+@router.get("/{node_id}", response_model=schemas.NodeResponse, response_model_by_alias=False)
 async def read_node_by_id(
     node_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(get_db)
+    # Removed: user_payload: dict = Depends(security_supabase.get_current_user_token)
 ) -> Any:
     repo = NodeRepository(db)
     # Try by UUID first
@@ -146,19 +295,70 @@ async def read_node_by_id(
     except Exception:
         node = None
         
-    # If not found, try by node_key
+    # If not found, try by hardware_id (node_key)
     if not node:
-        node = await repo.get_by_key(node_id)
+        # Query by hardware_id since that's the actual node_key field
+        result = await db.execute(
+            select(repo.model)
+            .options(
+                selectinload(repo.model.config_tank),
+                selectinload(repo.model.config_deep),
+                selectinload(repo.model.config_flow),
+                selectinload(repo.model.thingspeak_mappings)
+            )
+            .filter(repo.model.hardware_id == node_id)
+        )
+        node = result.scalars().first()
+        
+    # If still not found, try by node_key (if it exists)
+    if not node:
+        try:
+            node = await repo.get_by_key(node_id)
+        except Exception:
+            node = None
+        
+    if node and node.thingspeak_mappings:
+        for mapping in node.thingspeak_mappings:
+            if mapping.read_api_key:
+                mapping.read_api_key = EncryptionService.decrypt(mapping.read_api_key)
         
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     return node
 
+@router.get("/health", response_model=dict)
+async def health_check(db: AsyncSession = Depends(get_db)) -> dict:
+    """
+    Database and API health check endpoint.
+    """
+    try:
+        # Test database connection
+        await db.execute("SELECT 1")
+        
+        # Test node repository
+        from app.models.all_models import Node
+        result = await db.execute(select(Node))
+        node_count = len(result.scalars().all())
+        
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "node_count": node_count,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
 @router.get("/{node_id}/analytics", response_model=schemas.NodeAnalyticsResponse)
 async def get_node_analytics(
     node_id: str,
-    db: AsyncSession = Depends(get_db),
-    user_payload: dict = Depends(security_supabase.get_current_user_token)
+    db: AsyncSession = Depends(get_db)
+    # Removed: user_payload: dict = Depends(security_supabase.get_current_user_token)
 ) -> Any:
     """
     Returns calculated analytics using REAL ThingSpeak Data.

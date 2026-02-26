@@ -56,13 +56,15 @@ class NodeRepository(BaseRepository[Node]):
                 selectinload(self.model.config_tank),
                 selectinload(self.model.config_deep),
                 selectinload(self.model.config_flow),
-                selectinload(self.model.thingspeak_mapping)
+                selectinload(self.model.thingspeak_mappings)
             )
             .filter(self.model.id == id)
         )
         node = result.scalars().first()
-        if node and node.thingspeak_mapping:
-            node.thingspeak_mapping.read_api_key = EncryptionService.decrypt(node.thingspeak_mapping.read_api_key)
+        if node and node.thingspeak_mappings:
+            for mapping in node.thingspeak_mappings:
+                if mapping.read_api_key:
+                    mapping.read_api_key = EncryptionService.decrypt(mapping.read_api_key)
         return node
 
     async def get_all(self, skip: int = 0, limit: int = 100, distributor_id: Optional[str] = None) -> List[Node]:
@@ -70,7 +72,7 @@ class NodeRepository(BaseRepository[Node]):
             selectinload(self.model.config_tank),
             selectinload(self.model.config_deep),
             selectinload(self.model.config_flow),
-            selectinload(self.model.thingspeak_mapping)
+            selectinload(self.model.thingspeak_mappings)
         )
         if distributor_id:
             query = query.filter(self.model.distributor_id == distributor_id)
@@ -78,9 +80,20 @@ class NodeRepository(BaseRepository[Node]):
         result = await self.session.execute(query.offset(skip).limit(limit))
         nodes = result.scalars().all()
         for node in nodes:
-            if node.thingspeak_mapping:
-                node.thingspeak_mapping.read_api_key = EncryptionService.decrypt(node.thingspeak_mapping.read_api_key)
+            if node.thingspeak_mappings:
+                for mapping in node.thingspeak_mappings:
+                    if mapping.read_api_key:
+                        mapping.read_api_key = EncryptionService.decrypt(mapping.read_api_key)
         return nodes
+
+    async def get_all_summary(self, skip: int = 0, limit: int = 100, distributor_id: Optional[str] = None) -> List[Node]:
+        """Lightweight fetch for list/registry views — no eager-loading of relations."""
+        query = select(self.model)
+        if distributor_id:
+            query = query.filter(self.model.distributor_id == distributor_id)
+        result = await self.session.execute(query.offset(skip).limit(limit))
+        return result.scalars().all()
+
 
     async def get_by_key(self, key: str) -> Optional[Node]:
         result = await self.session.execute(
@@ -89,13 +102,15 @@ class NodeRepository(BaseRepository[Node]):
                 selectinload(self.model.config_tank),
                 selectinload(self.model.config_deep),
                 selectinload(self.model.config_flow),
-                selectinload(self.model.thingspeak_mapping)
+                selectinload(self.model.thingspeak_mappings)
             )
-            .filter(self.model.node_key == key)
+            .filter(self.model.hardware_id == key)  # hardware_id is the actual node_key
         )
         node = result.scalars().first()
-        if node and node.thingspeak_mapping:
-            node.thingspeak_mapping.read_api_key = EncryptionService.decrypt(node.thingspeak_mapping.read_api_key)
+        if node and node.thingspeak_mappings:
+            for mapping in node.thingspeak_mappings:
+                if mapping.read_api_key:
+                    mapping.read_api_key = EncryptionService.decrypt(mapping.read_api_key)
         return node
 
     async def get_count_by_customer(self, customer_id: str) -> int:

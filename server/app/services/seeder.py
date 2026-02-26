@@ -1,6 +1,6 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.all_models import User, Node
+from app.models.all_models import User, Node, AlertRule, AlertHistory
 from app.db.session import AsyncSessionLocal
 from app.core.config import get_settings
 from datetime import datetime
@@ -92,12 +92,34 @@ async def seed_db(force: bool = True):
                         n_data["analytics_type"] = n_data.pop("type")
                     
                     n_data["id"] = node_id
-                    # Ensure created_at is set
-                    if "created_at" not in n_data:
-                        n_data["created_at"] = datetime.utcnow()
+                    n_data["created_at"] = datetime.utcnow()
                     session.add(Node(**n_data))
                     nodes_added += 1
                 
+                # 3. Alert Rules & History (Sample)
+                if nodes_added > 0 or force:
+                    # Add a sample rule for the first node
+                    first_node_id = INITIAL_NODES[0]["id"]
+                    rule_id = f"rule_{first_node_id}_low"
+                    existing_rule = await session.get(AlertRule, rule_id)
+                    if not existing_rule:
+                        session.add(AlertRule(
+                            id=rule_id,
+                            node_id=first_node_id,
+                            metric="flow_rate",
+                            operator="<",
+                            threshold=10.0,
+                            enabled=True
+                        ))
+                        # Add an active alert
+                        session.add(AlertHistory(
+                            id=f"alert_{first_node_id}_{int(datetime.utcnow().timestamp())}",
+                            node_id=first_node_id,
+                            rule_id=rule_id,
+                            value_at_time=5.2,
+                            triggered_at=datetime.utcnow()
+                        ))
+
                 await session.commit()
                 
                 from sqlalchemy import select, func

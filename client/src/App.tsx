@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import { Home, Dashboard, AllNodes, Admin, NodeDetails, EvaraTank, EvaraDeep, EvaraFlow, Login } from './pages';
+import { Home, Dashboard, AllNodes, Admin, NodeDetails, EvaraTank, EvaraDeep, EvaraFlow, Login, Analytics } from './pages';
 import AIAssistant from './pages/AIAssistant';
 import AdminLayout from './layouts/AdminLayout';
 // import SuperAdminOverview from './pages/SuperAdminOverview';
@@ -89,7 +89,7 @@ function App() {
                     <ToastProvider>
                         <Router>
                             <Routes>
-                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                                <Route path="/" element={<Navigate to="/login" replace />} />
                                 <Route path="/login" element={<Login />} />
 
                                 <Route element={<ProtectedRoute />}>
@@ -103,6 +103,7 @@ function App() {
                                         <Route path="/evaraflow" element={<EvaraFlow />} />
                                         <Route path="/admin" element={<Admin />} />
                                         <Route path="/ai" element={<AIAssistant />} />
+                                        <Route path="/analytics" element={<Analytics />} />
                                     </Route>
 
                                     {/* Admin Routes (Super Admin & Distributor) */}

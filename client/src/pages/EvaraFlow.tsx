@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Chart, { type ChartConfiguration } from 'chart.js/auto';
 import { useThingSpeak } from '../hooks/useThingSpeak';
-
 import { getDeviceDetails } from '../services/devices';
 import './EvaraFlow.css';
 
@@ -31,6 +30,35 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         readApiKey: string | null;
     } | null>(null);
 
+    // Get ThingSpeak data
+    const { feeds, loading, error, noConfig } = useThingSpeak({
+        channelId: tsConfig?.channelId ?? null,
+        readApiKey: tsConfig?.readApiKey ?? null,
+        filter
+    });
+
+    // Show loading state
+    if (loading) {
+        return (
+            <div className={`evara-flow-body${embedded ? ' ef-embedded' : ''}`}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+                    <div>Loading ThingSpeak data...</div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error || noConfig) {
+        return (
+            <div className={`evara-flow-body${embedded ? ' ef-embedded' : ''}`}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+                    <div>{error || 'ThingSpeak not configured'}</div>
+                </div>
+            </div>
+        );
+    }
+
     // Fetch ThingSpeak config from Backend
     useEffect(() => {
         if (!nodeId) {
@@ -54,12 +82,6 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         fetchConfig();
     }, [nodeId]);
 
-    useThingSpeak({
-        channelId: tsConfig?.channelId ?? null,
-        readApiKey: tsConfig?.readApiKey ?? null,
-        filter
-    });
-
     // Animation State
     const [flowFillHeight, setFlowFillHeight] = useState(0);
 
@@ -71,19 +93,73 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         return () => clearTimeout(timer);
     }, []);
 
+    // Process real ThingSpeak data
+    const processFlowData = () => {
+        if (!feeds.length) return {
+            trendData: [0, 0, 0, 0, 0, 0],
+            liveData: [0, 0, 0, 0, 0, 0],
+            instantFlow: 0,
+            cumulativeUsage: 0,
+            peakFlow: 0,
+            efficiency: 0,
+            usageBreakdown: [0, 0]
+        };
+
+        // Extract flow values from field1 (assuming field1 is flow rate)
+        const flowValues = feeds.map(feed => parseFloat(feed.field1 || '0')).filter(val => !isNaN(val));
+        
+        if (flowValues.length === 0) return {
+            trendData: [0, 0, 0, 0, 0, 0],
+            liveData: [0, 0, 0, 0, 0, 0],
+            instantFlow: 0,
+            cumulativeUsage: 0,
+            peakFlow: 0,
+            efficiency: 0,
+            usageBreakdown: [0, 0]
+        };
+
+        // Get recent data for charts
+        const recentValues = flowValues.slice(-6);
+        const liveValues = flowValues.slice(-6);
+        
+        // Calculate metrics
+        const instantFlow = flowValues[flowValues.length - 1] || 0;
+        const cumulativeUsage = flowValues.reduce((sum, val) => sum + val, 0);
+        const peakFlow = Math.max(...flowValues);
+        const avgFlow = flowValues.reduce((sum, val) => sum + val, 0) / flowValues.length;
+        const efficiency = avgFlow > 0 ? Math.min(100, (avgFlow / peakFlow) * 100) : 0;
+        
+        // Calculate usage breakdown (peak vs standard)
+        const threshold = peakFlow * 0.8;
+        const peakCount = flowValues.filter(val => val > threshold).length;
+        const standardCount = flowValues.length - peakCount;
+        
+        return {
+            trendData: recentValues,
+            liveData: liveValues,
+            instantFlow,
+            cumulativeUsage,
+            peakFlow,
+            efficiency,
+            usageBreakdown: [peakCount, standardCount]
+        };
+    };
+
+    const flowData = processFlowData();
+
     useEffect(() => {
         // 1. Flow Trend Chart (Line)
         if (flowTrendChartRef.current) {
             if (chartInstances.current.trend) chartInstances.current.trend.destroy();
 
-            // TODO(fake-data): replace with real ThingSpeak feeds data
+            // Use real ThingSpeak data
             const config: ChartConfiguration = {
                 type: 'line',
                 data: {
-                    labels: ['4am', '8am', '12pm', '4pm', '8pm', '12am'],
+                    labels: ['-5h', '-4h', '-3h', '-2h', '-1h', 'Now'],
                     datasets: [{
                         label: 'Flow Rate',
-                        data: [40, 120, 200, 150, 280, 60],
+                        data: flowData.trendData,
                         borderColor: '#0EA5E9',
                         backgroundColor: 'rgba(14, 165, 233, 0.1)',
                         fill: true,
@@ -105,14 +181,14 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         if (usageDoughnutRef.current) {
             if (chartInstances.current.usage) chartInstances.current.usage.destroy();
 
-            // TODO(fake-data): replace with real ThingSpeak feeds data
+            // Use real ThingSpeak data
             const config: ChartConfiguration = {
                 type: 'doughnut',
                 data: {
                     labels: ['Peak', 'Standard'],
                     datasets: [{
                         label: 'Usage',
-                        data: [45, 55],
+                        data: flowData.usageBreakdown,
                         backgroundColor: ['#0EA5E9', '#E2E8F0'],
                         borderWidth: 0
                     }]
@@ -129,14 +205,14 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         if (liveFlowBarRef.current) {
             if (chartInstances.current.live) chartInstances.current.live.destroy();
 
-            // TODO(fake-data): replace with real ThingSpeak feeds data
+            // Use real ThingSpeak data
             const config: ChartConfiguration = {
                 type: 'bar',
                 data: {
                     labels: ['-5m', '-4m', '-3m', '-2m', '-1m', 'Now'],
                     datasets: [{
                         label: 'Flow',
-                        data: [12, 14, 11, 15, 12, 12.5],
+                        data: flowData.liveData,
                         backgroundColor: '#7DD3FC',
                         borderRadius: 8
                     }]
@@ -149,13 +225,16 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
             };
             chartInstances.current.live = new Chart(liveFlowBarRef.current, config);
         }
+    }, [flowData]); // Re-render charts when data changes
 
+    // Cleanup charts on unmount
+    useEffect(() => {
         return () => {
             Object.values(chartInstances.current).forEach(chart => chart?.destroy());
         };
     }, []);
 
-    // if (noConfig) return <NodeNotConfigured analyticsType="EvaraFlow" />;
+    // if (noConfig) return <NodeNotConfigured />;
 
     return (
         <div className={`evara-flow-body${embedded ? ' ef-embedded' : ''}`}>
@@ -186,30 +265,26 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
                         </div>
                         <div>
                             <div className="ef-kpi-label">Instant Flow</div>
-                            {/* TODO(fake-data): replace with real ThingSpeak feeds data */}
-                            <div className="ef-kpi-value">12.5</div>
+                            <div className="ef-kpi-value">{flowData.instantFlow.toFixed(1)}</div>
                             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ef-primary)' }}>L/Min</div>
                         </div>
                     </div>
 
                     <div className="ef-card">
                         <div className="ef-kpi-label">Cumulative Usage</div>
-                        {/* TODO(fake-data): replace with real ThingSpeak feeds data */}
-                        <div className="ef-kpi-value">1,240 L</div>
+                        <div className="ef-kpi-value">{flowData.cumulativeUsage.toFixed(0)} L</div>
                         <div className="ef-kpi-sub" style={{ color: 'var(--ef-text-muted)' }}>Today</div>
                     </div>
 
                     <div className="ef-card">
                         <div className="ef-kpi-label">Peak Flow</div>
-                        {/* TODO(fake-data): replace with real ThingSpeak feeds data */}
-                        <div className="ef-kpi-value">28.4 L</div>
-                        <div className="ef-kpi-sub" style={{ color: 'var(--ef-warning)' }}>08:45 AM</div>
+                        <div className="ef-kpi-value">{flowData.peakFlow.toFixed(1)} L</div>
+                        <div className="ef-kpi-sub" style={{ color: 'var(--ef-warning)' }}>Last 24h</div>
                     </div>
 
                     <div className="ef-card">
                         <div className="ef-kpi-label">Efficiency</div>
-                        {/* TODO(fake-data): replace with real ThingSpeak feeds data */}
-                        <div className="ef-kpi-value">94%</div>
+                        <div className="ef-kpi-value">{flowData.efficiency.toFixed(0)}%</div>
                         <div className="ef-kpi-sub" style={{ color: 'var(--ef-success)' }}>Optimal Range</div>
                     </div>
 
@@ -233,13 +308,22 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
                         <div className="ef-chart-container" style={{ height: '180px' }}>
                             <canvas ref={usageDoughnutRef}></canvas>
                         </div>
-                        {/* TODO(fake-data): replace with real ThingSpeak feeds data */}
                         <div style={{ marginTop: '16px', fontSize: '13px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span>Morning Peak</span><span style={{ fontWeight: 700 }}>45%</span>
+                                <span>Peak Usage</span><span style={{ fontWeight: 700 }}>
+                                    {flowData.usageBreakdown[0] > 0 ? 
+                                        `${((flowData.usageBreakdown[0] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` : 
+                                        '0%'
+                                    }
+                                </span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Standard Usage</span><span style={{ fontWeight: 700 }}>55%</span>
+                                <span>Standard Usage</span><span style={{ fontWeight: 700 }}>
+                                    {flowData.usageBreakdown[1] > 0 ? 
+                                        `${((flowData.usageBreakdown[1] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` : 
+                                        '0%'
+                                    }
+                                </span>
                             </div>
                         </div>
                     </div>

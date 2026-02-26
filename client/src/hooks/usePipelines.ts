@@ -16,7 +16,18 @@ export function usePipelines(): UsePipelinesResult {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Demo mode - return empty pipelines quickly
+    const isDemoMode = import.meta.env.DEV && true;
+
     const fetchPipelines = useCallback(async () => {
+        if (isDemoMode) {
+            // Return empty pipelines for demo mode to avoid authentication delay
+            setPipelines([]);
+            setError(null);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const response = await api.get<PipelineRow[]>('/pipelines/');

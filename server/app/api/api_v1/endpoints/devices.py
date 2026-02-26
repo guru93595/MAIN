@@ -225,7 +225,7 @@ async def get_device_live_data(
 ):
     """
     Fetch live telemetry using stored ThingSpeak credentials.
-    Implements 30s TTL Caching.
+    Returns merged telemetry + specialized device config.
     """
     now = time.time()
     if node_id in live_telemetry_cache:
@@ -238,24 +238,45 @@ async def get_device_live_data(
     if not node:
         raise HTTPException(status_code=404, detail="Device not found")
         
-    if not node.thingspeak_mapping:
+    if not node.thingspeak_mappings:
          raise HTTPException(status_code=400, detail="Device has no telemetry mapping")
 
     ts_service = ThingSpeakTelemetryService()
-    config = {
-        "channel_id": node.thingspeak_mapping.channel_id,
-        "read_key": node.thingspeak_mapping.read_api_key,
-        "field_mapping": node.thingspeak_mapping.field_mapping
-    }
     
-    data = await ts_service.fetch_latest(node_id, config)
-    if not data:
-        raise HTTPException(status_code=503, detail="Unable to fetch live telemetry from ThingSpeak")
-        
+    # Prepare list of channel configs
+    channel_configs = [
+        {
+            "channel_id": m.channel_id,
+            "read_key": m.read_api_key,
+            "field_mapping": m.field_mapping
+        }
+        for m in node.thingspeak_mappings
+    ]
+    
+    data = await ts_service.fetch_latest(node_id, channel_configs)
+    
+    # Extract specialized config based on node type
+    specialized_config = {}
+    if node.analytics_type == "EvaraTank" and node.config_tank:
+        specialized_config = {"capacity": node.config_tank.capacity, "max_depth": node.config_tank.max_depth}
+    elif node.analytics_type == "EvaraDeep" and node.config_deep:
+        specialized_config = {"static_depth": node.config_deep.static_depth, "dynamic_depth": node.config_deep.dynamic_depth}
+    elif node.analytics_type == "EvaraFlow" and node.config_flow:
+        specialized_config = {"pipe_diameter": node.config_flow.pipe_diameter, "max_flow_rate": node.config_flow.max_flow_rate}
+
     response = {
         "device_id": node_id,
         "timestamp": data.get("timestamp"),
-        "metrics": {k: v for k, v in data.items() if k not in ["timestamp", "entry_id"]}
+        "metrics": {k: v for k, v in data.items() if k not in ["timestamp", "entry_id"]},
+        "config": specialized_config,
+        "settings": {
+            "sampling_rate": node.sampling_rate,
+            "threshold_low": node.threshold_low,
+            "threshold_high": node.threshold_high,
+            "sms_enabled": node.sms_enabled,
+            "dashboard_visible": node.dashboard_visible,
+            "logic_inverted": node.logic_inverted
+        }
     }
     
     live_telemetry_cache[node_id] = (now, response)

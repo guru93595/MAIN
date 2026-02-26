@@ -16,22 +16,14 @@ async def _get_current_user_for_dashboard(db: AsyncSession, user_payload: dict):
     import asyncio
     user_repo = UserRepository(db)
     user_id = user_payload.get("sub")
-    
     try:
         async with asyncio.timeout(3):
             current_user = await user_repo.get(user_id)
             if not current_user:
-                 # In dev, allow fallback if user not synced
-                 from app.core.config import get_settings
-                 if get_settings().ENVIRONMENT == "development":
-                     return models.User(id=user_id, role="superadmin", community_id="comm_myhome")
                  raise HTTPException(status_code=401, detail=f"User {user_id} not synchronized")
             return current_user
-    except (asyncio.TimeoutError, Exception):
-        from app.core.config import get_settings
-        if get_settings().ENVIRONMENT == "development":
-            return models.User(id=user_id, role="superadmin", community_id="comm_myhome")
-        raise HTTPException(status_code=503, detail="Database timeout")
+    except (asyncio.TimeoutError, Exception) as e:
+        raise HTTPException(status_code=503, detail=f"User profile resolution failed: {str(e)}")
 
 
 @router.get("/stats", response_model=Dict[str, Any])
@@ -93,17 +85,7 @@ async def get_dashboard_stats(
     except (asyncio.TimeoutError, Exception) as e:
         import traceback
         traceback.print_exc()
-        
-        from app.core.config import get_settings
-        if get_settings().ENVIRONMENT == "development":
-            print(f"⚠️ PRO-FALLBACK: DB unreachable in dashboard stats ({str(e)})")
-            return {
-                "total_nodes": 29,
-                "online_nodes": 25,
-                "active_alerts": 3,
-                "system_health": "Good (Mock)"
-            }
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=503, detail=f"Dashboard metrics unavailable: {str(e)}")
 
 @router.get("/alerts", response_model=List[Dict[str, Any]])
 async def get_active_alerts(

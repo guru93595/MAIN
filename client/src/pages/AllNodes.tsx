@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Search, Filter, Droplets, Waves, Gauge, MapPin, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Search, Filter, Droplets, Waves, Gauge, MapPin, X, Lock } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { useNodes } from '../hooks/useNodes';
+import { useAuth } from '../context/AuthContext';
 import type { NodeCategory, AnalyticsType } from '../types/database';
 
 // TODO(fake-data): ALL_NODES was hardcoded array, now using useNodes() Supabase hook
@@ -132,6 +133,11 @@ const AllNodes = () => {
     const [statusFilter, setStatusFilter] = useState<'all' | 'Online' | 'Offline'>('all');
 
     const { nodes, loading, error } = useNodes();
+    const { isAuthenticated } = useAuth();
+    const navigate = useNavigate();
+    
+    // Demo mode - allow analytics access without authentication
+    const isDemoMode = import.meta.env.DEV && false; // Set to false to require real data
 
     const filtered = nodes.filter(n => {
         try {
@@ -317,9 +323,8 @@ const AllNodes = () => {
                             const anCfg = ANALYTICS_CONFIG[node.analytics_type || 'EvaraTank'];
                             const isOnline = (node.status || '') === 'Online';
                             return (
-                                <Link
+                                <div
                                     key={node.node_key || node.id}
-                                    to={`/node/${node.node_key || node.id}`}
                                     className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col"
                                 >
                                     {/* Card top accent — analytics color */}
@@ -373,13 +378,29 @@ const AllNodes = () => {
                                     </div>
 
                                     {/* View Analytics footer */}
-                                    <div className={clsx(
-                                        'px-5 py-3 text-center text-xs font-bold tracking-wide transition-colors',
-                                        'bg-slate-50 text-slate-400 group-hover:bg-blue-600 group-hover:text-white'
-                                    )}>
-                                        View Analytics →
-                                    </div>
-                                </Link>
+                                    {(isAuthenticated || isDemoMode) ? (
+                                        <Link
+                                            to={`/node/${node.id}`}
+                                            className={clsx(
+                                                'px-5 py-3 text-center text-xs font-bold tracking-wide transition-colors',
+                                                'bg-slate-50 text-slate-400 group-hover:bg-blue-600 group-hover:text-white'
+                                            )}
+                                        >
+                                            {isDemoMode ? '🔓 Demo Analytics →' : 'View Analytics →'}
+                                        </Link>
+                                    ) : (
+                                        <button
+                                            onClick={() => navigate('/login')}
+                                            className={clsx(
+                                                'px-5 py-3 text-center text-xs font-bold tracking-wide transition-colors flex items-center justify-center gap-2',
+                                                'bg-slate-50 text-slate-400 group-hover:bg-blue-600 group-hover:text-white'
+                                            )}
+                                        >
+                                            <Lock size={12} />
+                                            Login to View Analytics
+                                        </button>
+                                    )}
+                                </div>
                             );
                         })}
                     </div>

@@ -233,7 +233,9 @@ async def onboard_customer(
         community_id=customer_in.community_id,
         distributor_id=customer_in.distributor_id,
         plan_id=customer_in.plan_id,
-        contact_number=customer_in.contact_number
+        contact_number=customer_in.contact_number,
+        city=customer_in.city,
+        company_name=customer_in.company_name
     )
     db.add(db_obj)
     
@@ -340,13 +342,15 @@ async def create_node(
             raise HTTPException(status_code=400, detail="Invalid coordinates (Latitude: -90 to 90, Longitude: -180 to 180)")
 
     # Validation: ThingSpeak Handshake
-    if node_in.thingspeak_mapping:
-        chan_id = node_in.thingspeak_mapping.get("channel_id")
-        read_key = node_in.thingspeak_mapping.get("read_api_key")
-        if chan_id:
-            is_valid = await TelemetryService.verify_thingspeak_channel(chan_id, read_key)
-            if not is_valid:
-                raise HTTPException(status_code=400, detail=f"ThingSpeak Handshake Failed for Channel ID: {chan_id}. Please check the ID and Read Key.")
+    if node_in.thingspeak_mappings:
+        first_mapping = node_in.thingspeak_mappings[0] if node_in.thingspeak_mappings else None
+        if first_mapping:
+            chan_id = first_mapping.get("channel_id")
+            read_key = first_mapping.get("read_api_key")
+            if chan_id:
+                is_valid = await TelemetryService.verify_thingspeak_channel(chan_id, read_key)
+                if not is_valid:
+                    raise HTTPException(status_code=400, detail=f"ThingSpeak Handshake Failed for Channel ID: {chan_id}. Please check the ID and Read Key.")
 
     node_id = str(uuid.uuid4())
     db_obj = models.Node(
@@ -359,7 +363,16 @@ async def create_node(
         lng=node_in.lng, # Use lng attribute
         customer_id=node_in.customer_id,
         community_id=node_in.community_id,
-        distributor_id=node_in.distributor_id
+        distributor_id=node_in.distributor_id,
+        sampling_rate=node_in.sampling_rate,
+        threshold_low=node_in.threshold_low,
+        threshold_high=node_in.threshold_high,
+        sms_enabled=node_in.sms_enabled,
+        dashboard_visible=node_in.dashboard_visible,
+        logic_inverted=node_in.logic_inverted,
+        is_individual=node_in.is_individual,
+        metrics_config=node_in.metrics_config,
+        created_by=user.get("sub")
     )
     db.add(db_obj)
 
@@ -375,13 +388,17 @@ async def create_node(
         db.add(config)
     
     # Handle Telemetry Mapping
-    if node_in.thingspeak_mapping:
-        mapping_data = node_in.thingspeak_mapping.copy()
+    mappings_to_add = []
+    if node_in.thingspeak_mappings:
+        mappings_to_add.extend(node_in.thingspeak_mappings)
+        
+    for mapping_data_raw in mappings_to_add:
+        mapping_data = mapping_data_raw.copy()
         raw_key = mapping_data.get("read_api_key")
         if raw_key:
             mapping_data["read_api_key"] = EncryptionService.encrypt(raw_key)
             
-        ts_map = models.DeviceThingSpeakMapping(device_id=node_id, **mapping_data)
+        ts_map = models.DeviceThingSpeakMapping(id=str(uuid.uuid4()), device_id=node_id, **mapping_data)
         db.add(ts_map)
     
     # Add Audit Log Entry
@@ -413,16 +430,25 @@ async def create_node(
         )
         raise HTTPException(status_code=500, detail=f"Atomic Provisioning Failed: {str(e)}")
     
-    # WebSocket Broadcast
-    await manager.broadcast(json.dumps({
-        "event": "NODE_PROVISIONED",
-        "node_id": db_obj.id,
-        "hardware_id": db_obj.node_key,
-        "category": db_obj.category
-    }))
+    # WebSocket Broadcast (wrapped to avoid breaking the response)
+    try:
+        await manager.broadcast(json.dumps({
+            "event": "NODE_PROVISIONED",
+            "node_id": db_obj.id,
+            "hardware_id": db_obj.node_key,
+            "category": db_obj.category
+        }))
+    except Exception as broadcast_err:
+        # Log the broadcast error but do not fail the request
+        # Assuming a logger is available; otherwise, ignore
+        pass
 
-    # Re-fetch to include relations in response
-    return await repo.get(db_obj.id)
+    # Re-fetch to include relations in response (wrapped to avoid errors)
+    try:
+        return await repo.get(db_obj.id)
+    except Exception as fetch_err:
+        # If fetching fails, return the basic node object
+        return db_obj
 
 # ─── SYSTEM CONFIG ───
 @router.put("/system/config", response_model=schemas.SystemConfigResponse)
@@ -477,27 +503,41 @@ async def read_system_stats(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(RequirePermission(Permission.COMMUNITY_READ))
 ):
+    from sqlalchemy import func as sqlfunc
     dist_id = get_effective_distributor_id(user)
-    
-    node_repo = NodeRepository(db)
-    cust_repo = CustomerRepository(db)
-    comm_repo = CommunityRepository(db)
-    
-    nodes = await node_repo.get_all(limit=1000, distributor_id=dist_id)
-    customers = await cust_repo.get_all(limit=1000, distributor_id=dist_id)
-    communities = await comm_repo.get_all(limit=1000, distributor_id=dist_id)
-    
-    total_nodes = len(nodes)
-    online_nodes = len([n for n in nodes if n.status == "online"])
-    active_alerts = len([n for n in nodes if n.status == "alert"])
-    
-    health = (online_nodes / total_nodes * 100) if total_nodes > 0 else 100
-    
+
+    # Build base filtered COUNT queries — no Python-side row loading
+    node_q = select(sqlfunc.count(models.Node.id))
+    online_q = select(sqlfunc.count(models.Node.id)).filter(models.Node.status == "online")
+    alert_q  = select(sqlfunc.count(models.Node.id)).filter(models.Node.status == "alert")
+    cust_q   = select(sqlfunc.count(models.Customer.id))
+    comm_q   = select(sqlfunc.count(models.Community.id))
+
+    if dist_id:
+        node_q   = node_q.filter(models.Node.distributor_id == dist_id)
+        online_q = online_q.filter(models.Node.distributor_id == dist_id)
+        alert_q  = alert_q.filter(models.Node.distributor_id == dist_id)
+        cust_q   = cust_q.filter(models.Customer.distributor_id == dist_id)
+        comm_q   = comm_q.filter(models.Community.distributor_id == dist_id)
+
+    # Run all 5 counts in parallel via asyncio.gather
+    import asyncio as _asyncio
+
+    async def _count(q):
+        r = await db.execute(q)
+        return r.scalar() or 0
+
+    total_nodes, online_nodes, active_alerts, total_customers, total_communities = await _asyncio.gather(
+        _count(node_q), _count(online_q), _count(alert_q), _count(cust_q), _count(comm_q)
+    )
+
+    health = (online_nodes / total_nodes * 100) if total_nodes > 0 else 100.0
+
     return {
         "total_nodes": total_nodes,
         "online_nodes": online_nodes,
         "active_alerts": active_alerts,
-        "total_customers": len(customers),
-        "total_communities": len(communities),
+        "total_customers": total_customers,
+        "total_communities": total_communities,
         "system_health": round(health, 1)
     }

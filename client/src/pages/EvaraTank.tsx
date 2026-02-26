@@ -41,11 +41,10 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
         sensorAlert: { state: 'green', text: 'CONNECTED' },
     });
 
-    // Constants from user snippet
+    // Constants
     const TOTAL_HEIGHT_CM = 85;
     const TOTAL_HEIGHT_M = 0.85;
     const MAX_CAPACITY = 500;
-    const TARGET_SENSOR_VAL = 40;
 
     // 1. Fetch Config from Backend
     useEffect(() => {
@@ -56,13 +55,27 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
 
         const fetchConfig = async () => {
             try {
+                console.log("🔍 Fetching device details for node:", nodeId);
                 const node = await getDeviceDetails(nodeId);
-                setTsConfig({
+                console.log("📊 Full node data received:", node);
+                console.log("🔑 ThingSpeak config:", {
+                    channelId: node.thingspeak_channel_id,
+                    readApiKey: node.thingspeak_read_api_key ? "***SET***" : "NULL"
+                });
+
+                const config = {
                     channelId: node.thingspeak_channel_id ?? null,
                     readApiKey: node.thingspeak_read_api_key ?? null,
-                });
+                };
+
+                console.log("🎯 Setting tsConfig to:", config);
+                setTsConfig(config);
+
+                if (!node.thingspeak_channel_id || !node.thingspeak_read_api_key) {
+                    console.warn("⚠️ ThingSpeak configuration missing in node data");
+                }
             } catch (err) {
-                console.error("Failed to fetch node config:", err);
+                console.error("❌ Failed to fetch node config:", err);
                 setTsConfig({ channelId: null, readApiKey: null });
             }
         };
@@ -133,7 +146,12 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
 
     // 3. Data Fetching Loop
     useEffect(() => {
-        if (!tsConfig?.channelId || !tsConfig?.readApiKey) return;
+        if (!tsConfig?.channelId || !tsConfig?.readApiKey) {
+            console.log("⚠️ ThingSpeak not configured, skipping data fetch");
+            return;
+        }
+
+        console.log("🔄 Starting ThingSpeak data fetching for channel:", tsConfig.channelId);
 
         const fetchData = async () => {
             let apiParams = '&results=15';
@@ -142,17 +160,54 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
             if (filter === '24h') apiParams = '&minutes=1440';
 
             const url = `https://api.thingspeak.com/channels/${tsConfig.channelId}/feeds.json?api_key=${tsConfig.readApiKey}${apiParams}`;
+            console.log("🌐 Fetching ThingSpeak data from:", url);
 
             try {
                 const response = await fetch(url);
+                console.log("📡 Response status:", response.status);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("❌ ThingSpeak API error:", response.status, response.statusText, errorText);
+                    throw new Error(`ThingSpeak API error: ${response.status} ${response.statusText}`);
+                }
+
                 const json = await response.json();
+                console.log("📊 ThingSpeak data received:", json);
                 const feeds = json.feeds;
 
-                // Static mock logic from snippet (mimicking the user's JS logic)
-                const sensorReading = TARGET_SENSOR_VAL;
+                if (!feeds || feeds.length === 0) {
+                    console.warn("⚠️ No feeds data available");
+                    setData(prev => ({
+                        ...prev,
+                        sensorAlert: { state: 'orange', text: 'NO DATA' }
+                    }));
+                    return;
+                }
+
+                // Get the latest reading from ThingSpeak
+                const latestFeed = feeds[feeds.length - 1];
+                console.log("📈 Latest feed:", latestFeed);
+
+                // Extract sensor reading from field2 (Distance sensor)
+                // field1 = Temperature, field2 = Distance on ThingSpeak channels
+                const sensorReading = parseFloat(latestFeed.field2 || '0');
+                console.log("📏 Sensor reading (distance):", sensorReading, "cm");
+
+                if (isNaN(sensorReading)) {
+                    console.error("❌ Invalid sensor reading:", sensorReading);
+                    setData(prev => ({
+                        ...prev,
+                        sensorAlert: { state: 'red', text: 'INVALID DATA' }
+                    }));
+                    return;
+                }
+
                 const currentLevel = TOTAL_HEIGHT_CM - sensorReading;
                 const percentage = (currentLevel / TOTAL_HEIGHT_CM) * 100;
                 const volume = (percentage / 100) * MAX_CAPACITY;
+
+                console.log("💧 Calculated values:", { currentLevel, percentage, volume });
 
                 // Alert Logic
                 let low = { state: 'green', text: 'NORMAL' };
@@ -169,48 +224,38 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
                     fillHeight: percentage,
                     lowAlert: low,
                     overAlert: over,
+                    rapidAlert: { state: 'green', text: 'NORMAL' },
                     sensorAlert: { state: 'green', text: 'CONNECTED' }
                 }));
 
-                // Update Charts
-                if (chartInstances.current.level) {
-                    // Color Logic
-                    let borderColor = '#4F46E5';
-                    let bgColor = 'rgba(79, 70, 229, 0.1)';
-
-                    if (percentage > 70) {
-                        borderColor = '#1e40af'; // Deep Blue
-                        bgColor = 'rgba(30, 64, 175, 0.2)';
-                    } else if (percentage < 30) {
-                        borderColor = '#38bdf8'; // Sky Blue
-                        bgColor = 'rgba(56, 189, 248, 0.2)';
-                    }
-
-                    chartInstances.current.level.data.datasets[0].borderColor = borderColor;
-                    chartInstances.current.level.data.datasets[0].backgroundColor = bgColor;
-
+                // Update Chart
+                if (chartInstances.current.level && feeds.length > 0) {
                     const labels = feeds.map((f: any) => {
                         let d = new Date(f.created_at);
-                        return d.getHours() + ":" + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     });
-                    // Mock data mapping as per snippet
-                    const points = feeds.map(() => currentLevel);
+
+                    const points = feeds.map((f: any) => {
+                        const reading = parseFloat(f.field2 || '0');
+                        return TOTAL_HEIGHT_CM - reading;
+                    });
 
                     chartInstances.current.level.data.labels = labels;
                     chartInstances.current.level.data.datasets[0].data = points;
                     chartInstances.current.level.update();
                 }
-
-            } catch (error) {
-                console.error("Error:", error);
-                setData(prev => ({ ...prev, sensorAlert: { state: 'red', text: 'DISCONNECTED' } }));
+            } catch (err) {
+                console.error("❌ ThingSpeak fetch error:", err);
+                setData(prev => ({
+                    ...prev,
+                    sensorAlert: { state: 'red', text: 'FETCH ERROR' }
+                }));
             }
         };
 
         fetchData();
         const interval = setInterval(fetchData, 15000); // 15s polling
         return () => clearInterval(interval);
-
     }, [tsConfig, filter]);
 
 
@@ -222,7 +267,10 @@ const EvaraTank = ({ embedded = false, nodeId }: EvaraTankProps) => {
         return { dot: 'et-alert-dot', text: 'et-alert-right' };
     };
 
-    if (!tsConfig?.channelId && !embedded) return <NodeNotConfigured analyticsType="EvaraTank" />;
+    if (!tsConfig?.channelId && !embedded) {
+        console.log("⚠️ ThingSpeak not configured for node:", nodeId);
+        return <NodeNotConfigured />;
+    }
 
     return (
         <div className={`evara-tank-body${embedded ? ' et-embedded' : ''}`}>

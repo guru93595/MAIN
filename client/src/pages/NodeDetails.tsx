@@ -6,6 +6,7 @@ import EvaraDeep from './EvaraDeep';
 import EvaraFlow from './EvaraFlow';
 import type { NodeRow, NodeCategory, AnalyticsType } from '../types/database';
 import clsx from 'clsx';
+import { MotorControl } from '../components/MotorControl';
 
 // ─── Category label helpers ───────────────────────────────────────────────────
 
@@ -35,11 +36,14 @@ const ANALYTICS_LABEL: Record<AnalyticsType, { label: string; badge: string }> =
 
 // ─── NodeDetails (smart router) ───────────────────────────────────────────────
 
-import { STATIC_NODES } from '../data/staticData';
+import api from '../services/api';
 
 const NodeDetails = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
+    // Demo mode - bypass authentication for development
+    const isDemoMode = import.meta.env.DEV && false; // Set to false to require real data
 
     const [node, setNode] = useState<NodeRow | null>(null);
     const [nodeLoading, setNodeLoading] = useState(true);
@@ -48,19 +52,23 @@ const NodeDetails = () => {
     useEffect(() => {
         if (!id) return;
 
-        // Simulate short delay for realism, then load static node
-        setNodeLoading(true);
-        setTimeout(() => {
-            const foundNode = STATIC_NODES.find(n => n.node_key === id);
-            if (foundNode) {
-                setNode(foundNode);
+        const fetchNodeDetails = async () => {
+            setNodeLoading(true);
+            try {
+                console.log("🔍 Fetching node details for ID:", id);
+                const response = await api.get<NodeRow>(`/nodes/${id}`);
+                console.log("� Node response received:", response.data);
+                setNode(response.data);
                 setNodeError(null);
-            } else {
-                setNode(null);
-                setNodeError('Node not found in static data');
+            } catch (err: any) {
+                console.error("❌ Error fetching node details:", err);
+                setNodeError(err.response?.data?.detail || "Failed to load node");
+            } finally {
+                setNodeLoading(false);
             }
-            setNodeLoading(false);
-        }, 100);
+        };
+
+        fetchNodeDetails();
     }, [id]);
 
     // Unknown node — show graceful 404
@@ -92,12 +100,32 @@ const NodeDetails = () => {
         );
     }
 
-    const catStyles = CAT_STYLES[node.category as NodeCategory];
-    const analLabel = ANALYTICS_LABEL[node.analytics_type as AnalyticsType];
+    const fallbackCatStyle = { badge: 'bg-slate-100 text-slate-700', accentBg: 'from-slate-50 to-slate-100', accentText: 'text-slate-700' };
+    const fallbackAnalLabel = { label: node.analytics_type || 'Unknown', badge: 'bg-slate-100 text-slate-700' };
+
+    const catStyles = CAT_STYLES[node.category as NodeCategory] || fallbackCatStyle;
+    const analLabel = ANALYTICS_LABEL[node.analytics_type as AnalyticsType] || fallbackAnalLabel;
     const isOnline = node.status === 'Online';
 
     return (
         <div className="flex flex-col min-h-full bg-slate-50">
+            {/* Demo Mode Banner */}
+            {isDemoMode && (
+                <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2">
+                    <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-yellow-600 font-bold text-sm">🔓 Demo Mode</span>
+                            <span className="text-yellow-700 text-xs">Analytics are shown with sample data</span>
+                        </div>
+                        <button
+                            onClick={() => navigate('/login')}
+                            className="text-xs text-yellow-600 hover:text-yellow-700 font-semibold underline"
+                        >
+                            Login for Real Data
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Context header bar ── */}
             <div className={clsx('bg-gradient-to-r border-b border-slate-200 shadow-sm', catStyles.accentBg)}>
@@ -147,10 +175,42 @@ const NodeDetails = () => {
             </div>
 
             {/* ── Analytics page — rendered inline, no sidebar ── */}
-            <div className="flex-1">
-                {node.analytics_type === 'EvaraTank' && <EvaraTank embedded nodeId={node.node_key} />}
-                {node.analytics_type === 'EvaraDeep' && <EvaraDeep embedded nodeId={node.node_key} />}
-                {node.analytics_type === 'EvaraFlow' && <EvaraFlow embedded nodeId={node.node_key} />}
+            <div className="flex-1 max-w-screen-2xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-3">
+                    {node.analytics_type === 'EvaraTank' && <EvaraTank embedded nodeId={node.id} />}
+                    {node.analytics_type === 'EvaraDeep' && <EvaraDeep embedded nodeId={node.id} />}
+                    {node.analytics_type === 'EvaraFlow' && <EvaraFlow embedded nodeId={node.id} />}
+                </div>
+
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Only show Motor Control for certain categories/analytics types */}
+                    {(node.category === 'PumpHouse' || node.analytics_type === 'EvaraDeep') && (
+                        <MotorControl
+                            nodeId={node.id}
+                            initialStatus={node.status === 'Online'}
+                        />
+                    )}
+
+                    {/* Additional Metadata / Node Info Card */}
+                    <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Device Metadata</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400">Installation Date</p>
+                                <p className="text-sm font-bold text-slate-700">Oct 12, 2023</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400">Firmware Version</p>
+                                <p className="text-sm font-bold text-slate-700 font-mono text-blue-600">v2.4.1-stable</p>
+                            </div>
+                            <div className="pt-2 border-t border-slate-50">
+                                <button className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors">
+                                    Refresh Device Diagnostics
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

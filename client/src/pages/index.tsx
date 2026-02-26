@@ -10,3 +10,4 @@ export { default as EvaraTank } from './EvaraTank';
 export { default as EvaraDeep } from './EvaraDeep';
 export { default as EvaraFlow } from './EvaraFlow';
 export { default as Login } from './Login';
+export { default as Analytics } from './Analytics';

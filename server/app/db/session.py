@@ -23,7 +23,6 @@ engine = create_async_engine(
         "command_timeout": 60,
         "server_settings": {
             "application_name": "evara_backend",
-            "connect_timeout": "30",
             "statement_timeout": "60000"
         },
         "statement_cache_size": 0,  # Fix for pgbouncer duplicate statement error
@@ -51,16 +50,15 @@ async def get_db():
 async def create_tables():
     from app.models.all_models import Base as ModelsBase
     import asyncio
+    
+    # 🔗 Attempting to connect to database...
+    print("🔗 Attempting to connect to database (STRICT MODE)...")
     try:
-        # 30-second timeout for Supabase connection
-        print("🔗 Attempting to connect to database...")
-        async with asyncio.timeout(30):
-            async with engine.begin() as conn:
-                await conn.run_sync(ModelsBase.metadata.create_all)
+        async with engine.begin() as conn:
+            await conn.run_sync(ModelsBase.metadata.create_all)
         print("✅ Database tables created successfully")
-    except asyncio.TimeoutError:
-        print("⚠️ DATABASE ERROR: Connection timeout (30s)")
-        print("🔄 Backend will continue without creating tables")
     except Exception as e:
-        print(f"⚠️ DATABASE ERROR: {e}")
-        print("🔄 Backend will continue without creating tables")
+        if "DuplicateObjectError" in str(e) or "duplicate key value violates unique constraint" in str(e):
+            print("✅ Database tables and types already exist (Skipped recreation)")
+        else:
+            raise e

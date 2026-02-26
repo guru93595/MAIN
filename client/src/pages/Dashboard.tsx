@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { MapMarkerNode } from '../components/MapMarkerNode';
 import {
     Activity, ArrowUpRight, AlertTriangle,
     Server, Clock, Download, FileText
@@ -17,9 +18,6 @@ import { getActiveAlerts, type AlertHistory } from '../services/alerts';
 import api from '../services/api';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { CompleteDashboard } from '../components/CompleteDashboard';
-import { TestDataFetch } from '../components/TestDataFetch';
-import { AuthDebug } from '../components/AuthDebug';
-import { DevLogin } from '../components/DevLogin';
 
 function SyncAccountButton({ onSync }: { onSync: () => void }) {
     const [syncing, setSyncing] = useState(false);
@@ -47,60 +45,6 @@ function SyncAccountButton({ onSync }: { onSync: () => void }) {
         </button>
     );
 }
-
-// Custom Purple Icon (Pump House)
-const purpleIcon = L.divIcon({
-    className: 'custom-purple-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#9333ea" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
-
-// Custom Green Icon (Sump)
-const greenIcon = L.divIcon({
-    className: 'custom-green-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#16a34a" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
-
-// Custom Blue Icon (OHT)
-const blueIcon = L.divIcon({
-    className: 'custom-blue-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#2563eb" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
-
-// Custom Yellow Icon (Borewell)
-const yellowIcon = L.divIcon({
-    className: 'custom-yellow-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#eab308" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
-
-// Custom Black Icon (Govt Borewell)
-const blackIcon = L.divIcon({
-    className: 'custom-black-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#1e293b" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
-
-// Custom Red Icon (Alert/Offline)
-const redIcon = L.divIcon({
-    className: 'custom-red-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24]
-});
 
 const ChangeView = ({ nodes }: { nodes: NodeRow[] }) => {
     const map = useMap();
@@ -134,23 +78,9 @@ const MiniMap = ({ onExpand, nodes }: { onExpand: () => void, nodes: NodeRow[] }
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {nodes.map(node => {
-                    let icon = blueIcon;
-                    if (node.status === 'Alert' || node.status === 'Offline') icon = redIcon;
-                    else if (node.category === 'PumpHouse') icon = purpleIcon;
-                    else if (node.category === 'Sump') icon = greenIcon;
-                    else if (node.category === 'OHT') icon = blueIcon;
-                    else if (node.category === 'Borewell') icon = yellowIcon;
-                    else if (node.category === 'GovtBorewell') icon = blackIcon;
-
-                    return (
-                        <Marker
-                            key={node.id}
-                            position={[node.lat || 17.44, node.lng || 78.34]}
-                            icon={icon}
-                        />
-                    );
-                })}
+                {nodes.map(node => (
+                    <MapMarkerNode key={node.id} node={node} />
+                ))}
             </MapContainer>
 
             <button
@@ -183,39 +113,44 @@ const LiveFeedCard = ({ nodeId }: { nodeId?: string }) => {
         </div>
     );
 
-    const firstMetric = telemetry ? Object.entries(telemetry.metrics)[0] : null;
+    const metrics = telemetry?.metrics || {};
+    const metricEntries = Object.entries(metrics);
 
     return (
-        <div className="bg-white/100 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-blue-100 flex flex-col justify-between hover:shadow-md transition-all duration-300">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-xs font-bold text-blue-500 mb-1 uppercase tracking-tighter">Live Feed</p>
-                    {loading ? (
-                        <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
-                    ) : error ? (
-                        <h2 className="text-sm font-bold text-red-400">Check Credentials</h2>
-                    ) : firstMetric ? (
-                        <h2 className="text-3xl font-black text-slate-800">
-                            {typeof firstMetric[1] === 'number' ? firstMetric[1].toFixed(1) : firstMetric[1]}
-                            <span className="text-sm font-bold text-slate-400 ml-1 capitalize">{firstMetric[0]}</span>
-                        </h2>
-                    ) : (
-                        <h2 className="text-3xl font-bold text-slate-300">--</h2>
-                    )}
+        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between hover:shadow-md transition-all duration-300 overflow-hidden">
+            <div className="flex justify-between items-start mb-2">
+                <div className="flex flex-col">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Live Feed</p>
+                    <div className="flex flex-wrap gap-4">
+                        {loading ? (
+                            <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
+                        ) : error ? (
+                            <h2 className="text-sm font-bold text-red-400">Check Credentials</h2>
+                        ) : metricEntries.length > 0 ? (
+                            metricEntries.map(([key, val]) => (
+                                <div key={key} className="flex flex-col">
+                                    <h2 className="text-2xl font-black text-slate-800">
+                                        {typeof val === 'number' ? val.toFixed(1) : val}
+                                        <span className="text-[10px] font-bold text-slate-400 ml-1 capitalize">{key}</span>
+                                    </h2>
+                                </div>
+                            ))
+                        ) : (
+                            <h2 className="text-2xl font-bold text-slate-300">--</h2>
+                        )}
+                    </div>
                 </div>
-                <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl animate-pulse">
+                <div className={`p-3 rounded-xl ${telemetry ? 'bg-cyan-50 text-cyan-600' : 'bg-slate-50 text-slate-400'}`}>
                     <Activity className="w-5 h-5" />
                 </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-lg">
+            <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-50 w-fit px-2 py-1 rounded-lg">
                 <Clock className="w-3 h-3 text-blue-400" />
                 {telemetry?.timestamp ? new Date(telemetry.timestamp).toLocaleTimeString() : 'Waiting for feed...'}
             </div>
         </div>
     );
 };
-
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 const Dashboard = () => {
     const { loading } = useAuth();
@@ -225,15 +160,15 @@ const Dashboard = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'complete'>('overview');
 
+    const selectedNode = nodes.find(n => n.status === 'Online') || nodes[0];
     const [health, setHealth] = useState<SystemHealth | null>(null);
     const [activeAlerts, setActiveAlerts] = useState<AlertHistory[]>([]);
 
     useEffect(() => {
         getSystemHealth().then(setHealth).catch(console.error);
         getActiveAlerts().then(setActiveAlerts).catch(console.error);
-    }, []);
+    }, [selectedNode]);
 
-    // Derived stats from Nodes (Real-time)
     const tanks = nodes.filter(n => (n.analytics_type || '') === 'EvaraTank');
     const flow = nodes.filter(n => (n.analytics_type || '') === 'EvaraFlow');
     const borewells = nodes.filter(n => (n.analytics_type || '') === 'EvaraDeep');
@@ -250,8 +185,8 @@ const Dashboard = () => {
         name: n.label || n.id,
         type: n.category,
         status: n.status,
-        lastComm: 'Just now', // Mock
-        health: n.status === 'Online' ? 95 : 40 // Mock
+        lastComm: 'Just now',
+        health: n.status === 'Online' ? 95 : 40
     }));
 
     if (loading || nodesLoading) {
@@ -295,284 +230,183 @@ const Dashboard = () => {
 
     return (
         <div className="h-screen flex flex-col p-5 bg-slate-50 font-sans overflow-hidden">
-
-            {/* Navigation Overlay Animation */}
-            {/* Navigation Overlay Animation - Simple & Clean */}
             <div className={`fixed inset-0 bg-white/40 backdrop-blur-[2px] z-[9999] pointer-events-none transition-opacity duration-500 ease-in-out ${isNavigating ? 'opacity-100' : 'opacity-0'}`} />
-
             <div className={`fixed top-0 left-0 right-0 h-1 bg-blue-500 z-[10000] pointer-events-none transition-all duration-700 ${isNavigating ? 'w-full opacity-100' : 'w-0 opacity-0'}`} />
 
-            {/* ── Header ── */}
             <div className="flex-none flex items-center justify-between mb-5">
                 <h1 className="text-4xl font-extrabold text-blue-600 tracking-tight">System Dashboard</h1>
                 <span className="text-base font-semibold text-slate-400">Last updated: <span className="text-slate-600">{now}</span></span>
             </div>
 
-            {/* ── Tab Navigation ── */}
             <div className="flex-none mb-5">
-                <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg">
+                <div className="flex space-x-1 bg-slate-100 p-1 rounded-lg w-fit">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                            activeTab === 'overview'
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`px-4 py-2 rounded-md text-sm font-black transition-all ${activeTab === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         Overview
                     </button>
                     <button
                         onClick={() => setActiveTab('complete')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                            activeTab === 'complete'
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                        className={`px-4 py-2 rounded-md text-sm font-black transition-all ${activeTab === 'complete' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        Complete Data
+                        Detailed View
                     </button>
                 </div>
             </div>
 
-            {/* ── Tab Content ── */}
             {activeTab === 'complete' ? (
                 <div className="flex-1 overflow-auto">
                     <CompleteDashboard />
                 </div>
             ) : (
                 <>
-                    {/* ── Top Row ── */}
-                    {/* Reduced height to 250px for strict no-scroll */}
                     <div className="flex-none grid grid-cols-12 gap-4 mb-4" style={{ height: '250px' }}>
-
-                {/* Left 8 cols: stacked KPI rows */}
-                <div className="col-span-8 flex flex-col gap-4 h-full">
-
-                    {/* Top Row: Stats & Health */}
-                    <div className="col-span-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {/* Stat Cards */}
-                        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between hover:shadow-md transition-all duration-300">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500 mb-1">Total Assets</p>
-                                    <h2 className="text-3xl font-bold text-slate-800">{nodes.length}</h2>
-                                </div>
-                                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                                    <Activity className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-4 flex items-center gap-2 text-xs font-medium text-green-600 bg-green-50 w-fit px-2 py-1 rounded-lg">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-600"></span>
-                                All Systems Operational
-                            </div>
-                        </div>
-
-                        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between hover:shadow-md transition-all duration-300">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500 mb-1">Active Alerts</p>
-                                    <h2 className="text-3xl font-bold text-slate-800">{activeAlerts.length}</h2>
-                                </div>
-                                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                                    <AlertTriangle className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-4 flex items-center gap-2 text-xs font-medium text-slate-500 cursor-pointer" onClick={() => navigate('/alerts')}>
-                                View all alerts &rarr;
-                            </div>
-                        </div>
-
-                        <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between hover:shadow-md transition-all duration-300">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500 mb-1">System Health</p>
-                                    <h2 className="text-xl font-bold text-slate-800 capitalize">{health?.status || 'Active'}</h2>
-                                </div>
-                                <div className={`p-3 rounded-xl ${health?.status === 'ok' ? 'bg-green-50 text-green-600' : 'bg-green-50 text-green-600'}`}>
-                                    <Server className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-4 flex flex-col gap-1 text-xs text-slate-500">
-                                <div className="flex justify-between">
-                                    <span>DB:</span>
-                                    <span className={health?.services.database === 'ok' ? 'text-green-600' : 'text-green-600'}>
-                                        {health?.services.database || 'OK'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>IoT Broker:</span>
-                                    <span className={health?.services.thingspeak === 'ok' ? 'text-green-600' : 'text-green-600'}>
-                                        {health?.services.thingspeak || 'OK'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Live Feed Card */}
-                        <LiveFeedCard nodeId={nodes.find(n => n.status === 'Online')?.id} />
-                    </div>
-                    {/* Row 2 — 4 device-type counters */}
-                    <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraTank</span>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-4xl font-extrabold text-blue-600">{localStats.tanks.active}</span>
-                                <span className="text-2xl font-bold text-slate-300">/{localStats.tanks.total}</span>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraFlow</span>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-4xl font-extrabold text-cyan-600">{localStats.flow.active}</span>
-                                <span className="text-2xl font-bold text-slate-300">/{localStats.flow.total}</span>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">EvaraDeep</span>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-4xl font-extrabold text-purple-600">{localStats.deep.active}</span>
-                                <span className="text-2xl font-bold text-slate-300">/{localStats.deep.total}</span>
-                            </div>
-                        </div>
-                        <div className="bg-white rounded-2xl border-l-4 border-l-red-500 border border-red-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1 hover:shadow-md transition-shadow">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Alerts</span>
-                            <span className="text-4xl font-extrabold text-red-600">{localStats.alerts}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right 4 cols: Map */}
-                <div className="col-span-4 h-full">
-                    <MiniMap onExpand={handleMapClick} nodes={nodes} />
-                </div>
-            </div>
-
-            {/* ── Bottom Row — INCREASED FONTS as requested ── */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 gap-4">
-
-                {/* Col 1: Device Fleet */}
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center flex-none">
-                        <div>
-                            <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                                <Server size={24} className="text-blue-500" /> Device Fleet
-                            </h2>
-                        </div>
-                        <button className="text-blue-500 hover:text-blue-600 transition-colors font-bold text-2xl" onClick={() => navigate('/home')}>+</button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <table className="w-full text-left">
-                            <thead className="sticky top-0 bg-white z-10">
-                                <tr className="border-b border-slate-50 text-xs font-extrabold text-slate-400 uppercase tracking-widest">
-                                    <th className="px-5 py-3">Device</th>
-                                    <th className="px-5 py-3">Status</th>
-                                    <th className="px-5 py-3 text-right">Health</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50 text-base">
-                                {deviceFleet.map(dev => (
-                                    <tr key={dev.id} className="hover:bg-slate-50/60 transition-colors cursor-pointer" onClick={() => navigate(`/devices/${dev.id}`)}>
-                                        <td className="px-5 py-4">
-                                            <div className="font-bold text-slate-700 text-base">{dev.name}</div>
-                                            <div className="text-xs text-blue-400 font-mono">{dev.type}</div>
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <div className={`flex items-center gap-2 font-bold text-sm ${dev.status === 'Online' ? 'text-green-600' :
-                                                dev.status === 'Alert' ? 'text-red-600' :
-                                                    dev.status === 'Maintenance' ? 'text-amber-600' : 'text-slate-500'
-                                                }`}>
-                                                <div className={`w-2 h-2 rounded-full ${dev.status === 'Online' ? 'bg-green-500' :
-                                                    dev.status === 'Alert' ? 'bg-red-500' :
-                                                        dev.status === 'Maintenance' ? 'bg-amber-500' : 'bg-slate-400'
-                                                    }`} />
-                                                {dev.status}
-                                            </div>
-                                            <div className="text-xs text-slate-400 mt-1">{dev.lastComm}</div>
-                                        </td>
-                                        <td className="px-5 py-4 text-right">
-                                            <div className={`font-bold text-sm ${dev.health > 90 ? 'text-green-600' : dev.health > 50 ? 'text-amber-600' : 'text-red-600'}`}>
-                                                {dev.health}%
-                                            </div>
-                                            <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                                                <div className={`h-full rounded-full ${dev.health > 90 ? 'bg-green-500' : dev.health > 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${dev.health}%` }} />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Col 2: Alerts */}
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center flex-none">
-                        <div>
-                            <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                                <AlertTriangle size={24} className="text-red-500" /> Alerts
-                            </h2>
-                        </div>
-                        <span className="px-3 py-1 bg-red-50 text-red-600 font-extrabold text-xs rounded-full">{activeAlerts.length} Active</span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                        {activeAlerts.length === 0 ? (
-                            <div className="text-center text-slate-400 mt-10">No active alerts</div>
-                        ) : activeAlerts.map(a => (
-                            <div key={a.id} className="p-4 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group border border-transparent hover:border-slate-100">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2 text-base font-bold text-slate-800">
-                                        <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
-                                        {a.rule?.name || 'Alert'}
+                        <div className="col-span-8 flex flex-col gap-4 h-full">
+                            <div className="flex-1 grid grid-cols-4 gap-4">
+                                <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between">
+                                    <div className="flex justify-between items-start">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assets</p>
+                                        <Activity size={18} className="text-blue-500" />
                                     </div>
-                                    <span className="text-xs text-slate-400 font-medium whitespace-nowrap ml-2">{new Date(a.triggered_at).toLocaleTimeString()}</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <h2 className="text-3xl font-black text-slate-800">{nodes.length}</h2>
+                                        <span className="text-[10px] font-bold text-slate-400">UNITS</span>
+                                    </div>
                                 </div>
-                                <p className="text-sm text-slate-500 pl-6 group-hover:text-slate-700 transition-colors leading-relaxed">
-                                    Value {a.value_at_time} {a.rule?.condition} {a.rule?.threshold}
-                                </p>
+                                <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between">
+                                    <div className="flex justify-between items-start">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alerts</p>
+                                        <AlertTriangle size={18} className="text-red-500" />
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <h2 className="text-3xl font-black text-red-600">{activeAlerts.length}</h2>
+                                        <span className="text-[10px] font-bold text-red-400">ACTIVE</span>
+                                    </div>
+                                </div>
+                                <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-white/50 flex flex-col justify-between">
+                                    <div className="flex justify-between items-start">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Health</p>
+                                        <Server size={18} className="text-green-500" />
+                                    </div>
+                                    <div className="flex items-baseline gap-1">
+                                        <h2 className="text-2xl font-black text-green-600 uppercase">{health?.status || 'OK'}</h2>
+                                    </div>
+                                </div>
+                                <LiveFeedCard nodeId={nodes.find(n => n.status === 'Online')?.id} />
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Col 3: Quick Reports */}
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="px-5 py-4 border-b border-slate-50 flex-none">
-                        <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
-                            <FileText size={24} className="text-purple-500" /> Quick Reports
-                        </h2>
-                    </div>
-                    <div className="flex-1 p-5 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-                        <button className="w-full flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left group">
-                            <div className="p-3 bg-white rounded-xl shadow-sm text-slate-400 group-hover:text-blue-500 transition-colors">
-                                <Download size={24} />
+                            <div className="flex-1 grid grid-cols-4 gap-4">
+                                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase">EvaraTank</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-3xl font-black text-blue-600">{localStats.tanks.active}</span>
+                                        <span className="text-lg font-bold text-slate-300">/{localStats.tanks.total}</span>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase">EvaraFlow</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-3xl font-black text-cyan-600">{localStats.flow.active}</span>
+                                        <span className="text-lg font-bold text-slate-300">/{localStats.flow.total}</span>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase">EvaraDeep</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-3xl font-black text-purple-600">{localStats.deep.active}</span>
+                                        <span className="text-lg font-bold text-slate-300">/{localStats.deep.total}</span>
+                                    </div>
+                                </div>
+                                <div className="bg-red-50 rounded-2xl border border-red-100 shadow-sm px-5 flex flex-col justify-center items-start gap-1">
+                                    <span className="text-[10px] font-black text-red-400 uppercase">Down</span>
+                                    <span className="text-3xl font-black text-red-600">{localStats.alerts}</span>
+                                </div>
                             </div>
-                            <div>
-                                <div className="text-lg font-bold text-slate-700 group-hover:text-blue-700">Daily Report</div>
-                                <div className="text-sm text-slate-400 font-medium">Download PDF Format</div>
-                            </div>
-                        </button>
-                        <button className="w-full flex items-center gap-5 p-5 bg-slate-50 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all text-left group">
-                            <div className="p-3 bg-white rounded-xl shadow-sm text-slate-400 group-hover:text-purple-500 transition-colors">
-                                <Download size={24} />
-                            </div>
-                            <div>
-                                <div className="text-lg font-bold text-slate-700 group-hover:text-purple-700">Custom Export</div>
-                                <div className="text-sm text-slate-400 font-medium">Excel / CSV Format</div>
-                            </div>
-                        </button>
-
-                        <div className="mt-auto bg-purple-50 p-5 rounded-xl border border-purple-100">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Clock size={16} className="text-purple-500" />
-                                <span className="text-xs font-extrabold text-purple-700 uppercase tracking-wider">Scheduled</span>
-                            </div>
-                            <p className="text-sm font-medium text-purple-700 leading-snug">
-                                Monthly compliance report will be generated on <strong>28th Feb</strong>.
-                            </p>
+                        </div>
+                        <div className="col-span-4 h-full">
+                            <MiniMap onExpand={handleMapClick} nodes={nodes} />
                         </div>
                     </div>
-                </div>
-            </div>
+
+                    <div className="flex-1 min-h-0 grid grid-cols-3 gap-4">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                    <Server size={20} className="text-blue-500" /> Device Fleet
+                                </h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                <table className="w-full text-left">
+                                    <tbody className="divide-y divide-slate-50">
+                                        {deviceFleet.map(dev => (
+                                            <tr key={dev.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/node/${dev.id}`)}>
+                                                <td className="px-5 py-3">
+                                                    <div className="font-bold text-slate-700 text-sm">{dev.name}</div>
+                                                    <div className="text-[10px] text-blue-400 font-bold uppercase">{dev.type}</div>
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    <div className={`flex items-center gap-2 font-black text-[10px] ${dev.status === 'Online' ? 'text-green-600' : 'text-red-500'}`}>
+                                                        {dev.status}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                    <AlertTriangle size={20} className="text-red-500" /> Active Alerts
+                                </h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                {activeAlerts.length === 0 ? (
+                                    <div className="text-center text-slate-400 mt-10 text-xs font-bold uppercase tracking-widest">Clear</div>
+                                ) : activeAlerts.map(a => (
+                                    <div key={a.id} className="p-3 bg-red-50/50 rounded-xl border border-red-100">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-xs font-black text-red-600">{a.rule?.name}</span>
+                                            <span className="text-[10px] font-bold text-slate-400">{new Date(a.triggered_at).toLocaleTimeString()}</span>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-500">Value {a.value_at_time} {a.rule?.condition} {a.rule?.threshold}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-50 flex-none bg-slate-50/50">
+                                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                    <FileText size={20} className="text-purple-500" /> Analytics
+                                </h2>
+                            </div>
+                            <div className="flex-1 p-5 flex flex-col gap-3">
+                                <button 
+                                    onClick={() => navigate('/analytics')}
+                                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left group"
+                                >
+                                    <Download size={20} className="text-slate-400 group-hover:text-blue-500" />
+                                    <div>
+                                        <div className="text-sm font-black text-slate-700">Daily Summary</div>
+                                        <div className="text-[10px] font-bold text-slate-400">PDF Report</div>
+                                    </div>
+                                </button>
+                                <button 
+                                    onClick={() => navigate('/analytics')}
+                                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all text-left group"
+                                >
+                                    <Download size={20} className="text-slate-400 group-hover:text-purple-500" />
+                                    <div>
+                                        <div className="text-sm font-black text-slate-700">Custom Export</div>
+                                        <div className="text-[10px] font-bold text-slate-400">CSV/Excel</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </>
             )}
         </div>
@@ -586,4 +420,3 @@ const DashboardWithBoundary = () => (
 );
 
 export default DashboardWithBoundary;
-

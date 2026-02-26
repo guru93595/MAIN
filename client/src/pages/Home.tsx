@@ -1,92 +1,32 @@
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, ZoomControl, Polyline, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useState } from 'react';
 import { Activity, LayoutDashboard, Layers } from 'lucide-react';
 import clsx from 'clsx';
-import { Link } from 'react-router-dom';
 import { useNodes } from '../hooks/useNodes';
 import { usePipelines } from '../hooks/usePipelines';
-import L from 'leaflet';
-
-// Fix for default marker icon in React-Leaflet
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// Custom Purple Icon
-const purpleIcon = L.divIcon({
-    className: 'custom-purple-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#9333ea" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
-
-// Custom Green Icon (for Sumps)
-const sumpIcon = L.divIcon({
-    className: 'custom-green-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#16a34a" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
-
-// Custom Blue Icon (for OHTs)
-const blueIcon = L.divIcon({
-    className: 'custom-blue-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#2563eb" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
-
-// Custom Yellow Icon (for Borewells)
-const yellowIcon = L.divIcon({
-    className: 'custom-yellow-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#eab308" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
-
-// Custom Black Icon (for Govt Borewells)
-const blackIcon = L.divIcon({
-    className: 'custom-black-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#1e293b" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
-
-// Custom Red Icon (for Non-Working Borewells)
-const redIcon = L.divIcon({
-    className: 'custom-red-icon',
-    html: `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="#ef4444" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin drop-shadow-md"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -40]
-});
+import { MapMarkerNode } from '../components/MapMarkerNode';
 
 export const Home = () => {
-    const [showIndex, setShowIndex] = useState(false);
     const [showStatusOverview, setShowStatusOverview] = useState(false);
     const [showSystemDashboard, setShowSystemDashboard] = useState(false);
+    const [showIndex, setShowIndex] = useState(false);
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
     const [activePipeline, setActivePipeline] = useState<string | null>(null);
+
+    // Demo mode flag
+    const isDemoMode = import.meta.env.DEV && true;
 
     const { nodes, loading: nodesLoading } = useNodes();
     const { pipelines, loading: pipelinesLoading } = usePipelines();
 
     if (nodesLoading || pipelinesLoading) {
-        return <div className="flex items-center justify-center h-screen">Loading map data...</div>;
+        return (
+            <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] bg-slate-50 gap-4">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Synchronizing Map Data...</p>
+            </div>
+        );
     }
 
     const handleFilterClick = (filter: string) => {
@@ -108,17 +48,34 @@ export const Home = () => {
     const onlineNodes = nodes.filter(n => n.status === 'Online');
     const offlineNodes = nodes.filter(n => n.status === 'Offline' || n.status === 'Alert' || n.status === 'Maintenance');
 
-
-    // Center Map on PH-01
+    // Center Map on PH-01 area
     const position: [number, number] = [17.4456, 78.3490];
 
     return (
         <div className="relative w-full h-[calc(100vh-64px)] flex flex-col">
+            {/* Demo Mode Banner */}
+            {isDemoMode && (
+                <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2 z-[500]">
+                    <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-yellow-600 font-bold text-sm">🔓 Demo Mode</span>
+                            <span className="text-yellow-700 text-xs">Map shows sample data</span>
+                        </div>
+                        <button
+                            onClick={() => window.location.href = '/login'}
+                            className="text-xs text-yellow-600 hover:text-yellow-700 font-semibold underline"
+                        >
+                            Login for Real Data
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Map Container */}
             <div className="flex-1 relative z-0">
                 <MapContainer
                     center={position}
-                    zoom={17} // Zoomed in to see pipelines better
+                    zoom={17}
                     scrollWheelZoom={true}
                     zoomControl={false}
                     className="w-full h-full"
@@ -131,7 +88,7 @@ export const Home = () => {
                     {/* Pipelines */}
                     {pipelines.filter(pipe => {
                         if (activePipeline === null) return false;
-                        if (activePipeline === 'watersupply') return pipe.name.includes('PH'); // Heuristic or add type to DB
+                        if (activePipeline === 'watersupply') return !pipe.name.includes('PIPE');
                         if (activePipeline === 'borewellwater') return pipe.name.includes('PIPE');
                         return false;
                     }).map((pipe) => (
@@ -143,377 +100,168 @@ export const Home = () => {
                             <Popup>
                                 <div className="p-2">
                                     <h3 className="font-bold text-slate-800">{pipe.name}</h3>
-                                    {/* <p className="text-xs text-slate-500">{pipe.type}</p> */}
                                 </div>
                             </Popup>
                         </Polyline>
                     ))}
-                    {/* Pump House Markers (Purple Pins) */}
-                    {(activeFilter === null || activeFilter === 'pumphouse') && pumpHouses.map((ph) => (
-                        <Marker key={ph.id} position={[ph.lat, ph.lng]} icon={purpleIcon}>
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1">{ph.label}</h3>
-                                    <div className="mb-3">
-                                        <span className={clsx(
-                                            "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block",
-                                            ph.status === 'Online' ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
-                                        )}>
-                                            {ph.status}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        to={`/node/${ph.node_key}`}
-                                        className="block w-full text-center bg-blue-600 !text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                        style={{ color: 'white' }}
-                                    >
-                                        View Details
-                                    </Link>
-                                </div>
-                            </Popup>
-                        </Marker>
+
+                    {/* Map Markers */}
+                    {(activeFilter === null || activeFilter === 'pumphouse') && pumpHouses.map(node => (
+                        <MapMarkerNode key={node.id} node={node} />
+                    ))}
+                    {(activeFilter === null || activeFilter === 'sump') && sumps.map(node => (
+                        <MapMarkerNode key={node.id} node={node} />
+                    ))}
+                    {(activeFilter === null || activeFilter === 'oht') && ohts.map(node => (
+                        <MapMarkerNode key={node.id} node={node} />
+                    ))}
+                    {(activeFilter === null || activeFilter === 'borewell') && borewells.map(node => (
+                        <MapMarkerNode key={node.id} node={node} />
+                    ))}
+                    {(activeFilter === null || activeFilter === 'govtborewell') && govtBorewells.map(node => (
+                        <MapMarkerNode key={node.id} node={node} />
                     ))}
 
-                    {/* Sumps Markers (Green Pins) */}
-                    {(activeFilter === null || activeFilter === 'sump') && sumps.map((sump) => (
-                        <Marker key={sump.id} position={[sump.lat, sump.lng]} icon={sumpIcon}>
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1">{sump.label}</h3>
-                                    <div className="mb-3">
-                                        <span className={clsx(
-                                            "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block",
-                                            sump.status === 'Online' ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
-                                        )}>
-                                            {sump.status}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        to={`/node/${sump.node_key}`}
-                                        className="block w-full text-center bg-blue-600 !text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                        style={{ color: 'white' }}
-                                    >
-                                        View Details
-                                    </Link>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-
-                    {/* OHT Markers (Blue Pins) */}
-                    {(activeFilter === null || activeFilter === 'oht') && ohts.map((oht) => (
-                        <Marker key={oht.id} position={[oht.lat, oht.lng]} icon={blueIcon}>
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1">{oht.label}</h3>
-                                    <div className="mb-3">
-                                        <span className={clsx(
-                                            "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block",
-                                            oht.status === 'Online' ? "text-blue-600 bg-blue-50" : "text-red-600 bg-red-50"
-                                        )}>
-                                            {oht.status}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        to={`/node/${oht.node_key}`}
-                                        className="block w-full text-center bg-blue-600 !text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                        style={{ color: 'white' }}
-                                    >
-                                        View Details
-                                    </Link>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-
-                    {/* Borewell Markers (Yellow Pins) */}
-                    {(activeFilter === null || activeFilter === 'borewell' || activeFilter === 'nonworking') && borewells.filter(bw => {
-                        if (activeFilter === 'nonworking') return bw.status === 'Offline' || bw.status === 'Alert';
-                        if (activeFilter === 'borewell') return true;
-                        return true;
-                    }).map((bw) => (
-                        <Marker key={bw.id} position={[bw.lat, bw.lng]} icon={(bw.status === 'Offline' || bw.status === 'Alert') ? redIcon : yellowIcon}>
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1">{bw.label}</h3>
-                                    <div className="mb-3">
-                                        <span className={clsx(
-                                            "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block",
-                                            bw.status === 'Online' ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
-                                        )}>
-                                            {bw.status}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        to={`/node/${bw.node_key}`}
-                                        className="block w-full text-center bg-blue-600 !text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                        style={{ color: 'white' }}
-                                    >
-                                        View Details
-                                    </Link>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-
-                    {/* Govt Borewell Markers (Black Pins) */}
-                    {(activeFilter === null || activeFilter === 'govtborewell' || activeFilter === 'nonworking') && govtBorewells.filter(bw => {
-                        if (activeFilter === 'nonworking') return bw.status === 'Offline' || bw.status === 'Alert';
-                        if (activeFilter === 'govtborewell') return true;
-                        return true;
-                    }).map((bw) => (
-                        <Marker key={bw.id} position={[bw.lat, bw.lng]} icon={(bw.status === 'Offline' || bw.status === 'Alert') ? redIcon : blackIcon}>
-                            <Popup>
-                                <div className="p-2 min-w-[150px]">
-                                    <h3 className="font-bold text-slate-800 text-sm mb-1">{bw.label}</h3>
-                                    <div className="mb-3">
-                                        <span className={clsx(
-                                            "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block",
-                                            bw.status === 'Online' ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
-                                        )}>
-                                            {bw.status}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        to={`/node/${bw.node_key}`}
-                                        className="block w-full text-center bg-blue-600 !text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                                        style={{ color: 'white' }}
-                                    >
-                                        View Details
-                                    </Link>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-
-                    {/* Custom Zoom Control Position */}
                     <ZoomControl position="bottomright" />
                 </MapContainer>
+            </div>
 
-                {/* Overlay Buttons */}
-                <div className="absolute top-4 right-4 flex flex-col gap-3 z-[400]">
-                    <button onClick={() => { setShowStatusOverview(!showStatusOverview); setShowSystemDashboard(false); }} className={clsx("bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white transition-all group flex items-center gap-3", showStatusOverview && "ring-2 ring-blue-400")}>
-                        <div className={clsx("w-10 h-10 rounded-full flex items-center justify-center transition-colors", showStatusOverview ? "bg-[var(--color-evara-blue)] text-white" : "bg-blue-50 text-[var(--color-evara-blue)] group-hover:bg-[var(--color-evara-blue)] group-hover:text-white")}>
-                            <Activity size={20} />
-                        </div>
-                        <span className="font-semibold text-slate-700 pr-2">Status Overview</span>
-                    </button>
+            {/* Overlay Buttons */}
+            <div className="absolute top-4 right-4 flex flex-col gap-3 z-[400]">
+                <button
+                    onClick={() => { setShowStatusOverview(!showStatusOverview); setShowSystemDashboard(false); }}
+                    className={clsx(
+                        "bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white transition-all group flex items-center gap-3",
+                        showStatusOverview && "ring-2 ring-blue-400"
+                    )}
+                >
+                    <div className={clsx(
+                        "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                        showStatusOverview ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white"
+                    )}>
+                        <Activity size={20} />
+                    </div>
+                    <span className="font-bold text-slate-700 pr-2">Status Overview</span>
+                </button>
 
-                    <button onClick={() => { setShowSystemDashboard(!showSystemDashboard); setShowStatusOverview(false); }} className={clsx("bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white transition-all group flex items-center gap-3", showSystemDashboard && "ring-2 ring-green-400")}>
-                        <div className={clsx("w-10 h-10 rounded-full flex items-center justify-center transition-colors", showSystemDashboard ? "bg-[var(--color-evara-green)] text-white" : "bg-green-50 text-[var(--color-evara-green)] group-hover:bg-[var(--color-evara-green)] group-hover:text-white")}>
-                            <LayoutDashboard size={20} />
+                <button
+                    onClick={() => { setShowSystemDashboard(!showSystemDashboard); setShowStatusOverview(false); }}
+                    className={clsx(
+                        "bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-white transition-all group flex items-center gap-3",
+                        showSystemDashboard && "ring-2 ring-green-400"
+                    )}
+                >
+                    <div className={clsx(
+                        "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                        showSystemDashboard ? "bg-green-600 text-white" : "bg-green-50 text-green-600 group-hover:bg-green-600 group-hover:text-white"
+                    )}>
+                        <LayoutDashboard size={20} />
+                    </div>
+                    <span className="font-bold text-slate-700 pr-2">System Analytics</span>
+                </button>
+            </div>
+
+            {/* Status Overview Panel */}
+            <div className={clsx(
+                "absolute top-28 right-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-80 transition-all duration-300 origin-top-right overflow-hidden",
+                showStatusOverview ? "opacity-100 scale-100 max-h-[600px]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
+            )}>
+                <div className="p-5">
+                    <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                        <Activity size={16} className="text-blue-600" /> Infrastructure Status
+                    </h3>
+
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="bg-green-50 rounded-lg p-2.5 text-center">
+                            <div className="text-lg font-black text-green-600">{onlineNodes.length}</div>
+                            <div className="text-[10px] font-bold text-green-700">Online</div>
                         </div>
-                        <span className="font-semibold text-slate-700 pr-2">System Dashboard</span>
-                    </button>
+                        <div className="bg-red-50 rounded-lg p-2.5 text-center">
+                            <div className="text-lg font-black text-red-600">{offlineNodes.length}</div>
+                            <div className="text-[10px] font-bold text-red-700">Down</div>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-2.5 text-center">
+                            <div className="text-lg font-black text-blue-600">{nodes.length}</div>
+                            <div className="text-[10px] font-bold text-blue-700">Total</div>
+                        </div>
+                    </div>
+
+                    {/* Asset Breakdown */}
+                    <div className="space-y-3">
+                        {[
+                            { name: 'Pump Houses', total: pumpHouses.length, working: pumpHouses.filter(p => p.status === 'Online').length, color: '#9333ea', bg: 'bg-purple-50' },
+                            { name: 'Sumps', total: sumps.length, working: sumps.filter(s => s.status === 'Online').length, color: '#16a34a', bg: 'bg-green-50' },
+                            { name: 'Overhead Tanks', total: ohts.length, working: ohts.filter(o => o.status === 'Online').length, color: '#2563eb', bg: 'bg-blue-50' },
+                            { name: 'Borewells', total: borewells.length + govtBorewells.length, working: [...borewells, ...govtBorewells].filter(b => b.status === 'Online').length, color: '#eab308', bg: 'bg-yellow-50' },
+                        ].map((asset, i) => (
+                            <div key={i} className={clsx("rounded-xl p-3", asset.bg)}>
+                                <div className="flex justify-between items-center mb-1.5 font-bold">
+                                    <span className="text-xs text-slate-700">{asset.name}</span>
+                                    <span className="text-xs" style={{ color: asset.color }}>{asset.working}/{asset.total}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-white/50 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${asset.total > 0 ? (asset.working / asset.total) * 100 : 0}%`, background: asset.color }}></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
+            </div>
 
-                {/* Status Overview Panel */}
+            {/* Index Toggle */}
+            <div className="absolute bottom-6 left-6 z-[1000] flex flex-col items-start gap-3">
+                <button
+                    onClick={() => setShowIndex(!showIndex)}
+                    className="bg-white p-3 rounded-full shadow-xl border border-slate-200 text-slate-500 hover:text-blue-600 transition-all hover:scale-110 active:scale-95 pointer-events-auto"
+                >
+                    <Layers size={20} />
+                </button>
+
                 <div className={clsx(
-                    "absolute top-28 right-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-80 transition-all duration-300 origin-top-right overflow-hidden",
-                    showStatusOverview ? "opacity-100 scale-100 max-h-[600px]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
+                    "bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col transition-all duration-300 origin-bottom-left overflow-hidden pointer-events-auto",
+                    showIndex ? "opacity-100 scale-100 max-h-[500px]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
                 )}>
-                    <div className="p-5">
-                        <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <Activity size={16} className="text-[var(--color-evara-blue)]" /> Infrastructure Status
-                        </h3>
-
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-3 gap-2 mb-4">
-                            <div className="bg-green-50 rounded-lg p-2.5 text-center">
-                                <div className="text-lg font-extrabold text-green-600">{onlineNodes.length}</div>
-                                <div className="text-[10px] font-semibold text-green-700">Online</div>
+                    <div className="p-4">
+                        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">MAP LAYERS</h2>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handlePipelineClick('watersupply')}>
+                                <div className={clsx("w-8 h-1 rounded-full transition-all", activePipeline === 'watersupply' ? "bg-cyan-500 scale-x-125" : "bg-cyan-400/30 group-hover:bg-cyan-400")} />
+                                <span className={clsx("text-xs font-bold transition-colors", activePipeline === 'watersupply' ? "text-cyan-600" : "text-slate-500")}>Water Supply Lines</span>
                             </div>
-                            <div className="bg-red-50 rounded-lg p-2.5 text-center">
-                                <div className="text-lg font-extrabold text-red-600">{offlineNodes.length}</div>
-                                <div className="text-[10px] font-semibold text-red-700">Offline</div>
-                            </div>
-                            <div className="bg-blue-50 rounded-lg p-2.5 text-center">
-                                <div className="text-lg font-extrabold text-blue-600">{nodes.length}</div>
-                                <div className="text-[10px] font-semibold text-blue-700">Total</div>
+                            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => handlePipelineClick('borewellwater')}>
+                                <div className={clsx("w-8 h-1 rounded-full transition-all", activePipeline === 'borewellwater' ? "bg-indigo-500 scale-x-125" : "bg-indigo-400/30 group-hover:bg-indigo-400")} />
+                                <span className={clsx("text-xs font-bold transition-colors", activePipeline === 'borewellwater' ? "text-indigo-600" : "text-slate-500")}>Borewell Lines</span>
                             </div>
                         </div>
 
-                        {/* Asset Breakdown */}
-                        <div className="space-y-3">
+                        <div className="my-5 border-t border-slate-100" />
+
+                        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">ASSET CLASSIFICATION</h2>
+                        <div className="grid grid-cols-2 gap-3">
                             {[
-                                { name: 'Pump Houses', total: pumpHouses.length, working: pumpHouses.filter(p => p.status === 'Online').length, color: '#9333ea', bg: 'bg-purple-50' },
-                                { name: 'Sumps', total: sumps.length, working: sumps.filter(s => s.status === 'Online').length, color: '#16a34a', bg: 'bg-green-50' },
-                                { name: 'Overhead Tanks', total: ohts.length, working: ohts.filter(o => o.status === 'Online').length, color: '#2563eb', bg: 'bg-blue-50' },
-                                { name: 'Borewells (IIIT)', total: borewells.length, working: borewells.filter(b => b.status === 'Online').length, color: '#eab308', bg: 'bg-yellow-50' },
-                                { name: 'Borewells (Govt)', total: govtBorewells.length, working: govtBorewells.filter(b => b.status === 'Online').length, color: '#1e293b', bg: 'bg-slate-50' },
-                            ].map((asset, i) => (
-                                <div key={i} className={clsx("rounded-xl p-3", asset.bg)}>
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <span className="text-xs font-bold text-slate-700">{asset.name}</span>
-                                        <span className="text-xs font-bold" style={{ color: asset.color }}>{asset.working}/{asset.total}</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-white rounded-full overflow-hidden">
-                                        <div className="h-full rounded-full transition-all" style={{ width: `${asset.total > 0 ? (asset.working / asset.total) * 100 : 0}%`, background: asset.color }}></div>
-                                    </div>
-                                    <div className="flex justify-between mt-1">
-                                        <span className="text-[10px] text-green-600 font-semibold">{asset.working} active</span>
-                                        <span className="text-[10px] text-red-500 font-semibold">{asset.total - asset.working} down</span>
-                                    </div>
+                                { id: 'pumphouse', label: 'Pump House', color: 'bg-purple-100 text-purple-600' },
+                                { id: 'sump', label: 'Sump', color: 'bg-green-100 text-green-600' },
+                                { id: 'oht', label: 'OHT', color: 'bg-blue-100 text-blue-600' },
+                                { id: 'borewell', label: 'Borewell', color: 'bg-yellow-100 text-yellow-600' },
+                            ].map(item => (
+                                <div
+                                    key={item.id}
+                                    onClick={() => handleFilterClick(item.id)}
+                                    className={clsx(
+                                        "p-2 rounded-xl border transition-all cursor-pointer text-center",
+                                        activeFilter === item.id ? "bg-slate-800 border-slate-800 text-white shadow-lg" : "bg-slate-50 border-slate-100 text-slate-600 hover:border-slate-200"
+                                    )}
+                                >
+                                    <span className="text-[10px] font-black">{item.label}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
-
-                {/* System Dashboard Panel */}
-                <div className={clsx(
-                    "absolute top-28 right-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 w-80 transition-all duration-300 origin-top-right overflow-hidden",
-                    showSystemDashboard ? "opacity-100 scale-100 max-h-[700px]" : "opacity-0 scale-95 max-h-0 pointer-events-none"
-                )}>
-                    <div className="p-5">
-                        <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <LayoutDashboard size={16} className="text-[var(--color-evara-green)]" /> System Dashboard
-                        </h3>
-
-                        {/* Water Consumption - Dynamic Placeholder */}
-                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-3 mb-3">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Total Capacity</div>
-                            <div className="text-2xl font-extrabold text-blue-700">-- <span className="text-sm font-bold text-slate-400">Litres</span></div>
-                            <div className="text-[10px] text-green-600 font-semibold mt-0.5">Realtime data fetching...</div>
-                        </div>
-
-                        {/* System Health Metrics */}
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                            <div className="bg-green-50 rounded-lg p-2.5">
-                                <div className="text-[10px] font-bold text-slate-500">Uptime</div>
-                                <div className="text-lg font-extrabold text-green-600">99.8%</div>
-                            </div>
-                            <div className="bg-orange-50 rounded-lg p-2.5">
-                                <div className="text-[10px] font-bold text-slate-500">Active Alerts</div>
-                                <div className="text-lg font-extrabold text-orange-600">{offlineNodes.length}</div>
-                            </div>
-                            <div className="bg-purple-50 rounded-lg p-2.5">
-                                <div className="text-[10px] font-bold text-slate-500">Pipelines</div>
-                                <div className="text-lg font-extrabold text-purple-600">{pipelines.length}</div>
-                            </div>
-                            <div className="bg-cyan-50 rounded-lg p-2.5">
-                                <div className="text-[10px] font-bold text-slate-500">System Status</div>
-                                <div className="text-lg font-extrabold text-cyan-600">{nodesLoading ? 'Loading' : 'Active'}</div>
-                            </div>
-                        </div>
-
-                        {/* Pipeline Network */}
-                        <div className="bg-slate-50 rounded-xl p-3 mb-3">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Pipeline Network</div>
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs text-slate-600">Water Supply Lines</span>
-                                {/* Filter by checking naming convention or adding type to DB in future */}
-                                <span className="text-xs font-bold text-cyan-600">{pipelines.filter(p => !p.name.includes('PIPE')).length} active</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs text-slate-600">Borewell Lines</span>
-                                <span className="text-xs font-bold text-indigo-600">{pipelines.filter(p => p.name.includes('PIPE')).length} active</span>
-                            </div>
-                        </div>
-
-                        {/* Recent Activity */}
-                        <div className="bg-slate-50 rounded-xl p-3">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase mb-2">Recent Activity</div>
-                            <div className="space-y-2">
-                                {/* TODO: Fetch from audit_logs */}
-                                <div className="text-xs text-slate-400 italic">No recent activity detected.</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Index Corner Panel (Assets & Nodes) */}
-            <div className="absolute bottom-6 left-6 z-[1000] flex flex-col items-start pointer-events-none">
-                {/* Toggle Button */}
-                <button
-                    onClick={() => setShowIndex(!showIndex)}
-                    className="bg-white p-3 rounded-full shadow-lg border border-slate-200 text-slate-500 hover:text-[var(--color-evara-blue)] mb-2 pointer-events-auto transition-colors hover:shadow-xl"
-                    title={showIndex ? "Hide Index" : "Show Index"}
-                >
-                    <Layers size={20} />
-                </button>
-
-                {/* Index Card */}
-                <div className={clsx(
-                    "bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 flex flex-col transition-all duration-300 origin-bottom-left overflow-hidden pointer-events-auto",
-                    showIndex ? "opacity-100 scale-100 max-h-[500px]" : "opacity-0 scale-95 max-h-0"
-                )}>
-                    <div className="p-4">
-                        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 cursor-pointer hover:text-[var(--color-evara-blue)] transition-colors" onClick={() => setActiveFilter(null)}>ASSETS</h2>
-                        <div className="space-y-3">
-                            {/* Pump House */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'pumphouse' ? 'bg-purple-100 ring-2 ring-purple-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('pumphouse')}>
-                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#9333ea" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Pump House</span>
-                            </div>
-
-                            {/* Sump */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'sump' ? 'bg-green-100 ring-2 ring-green-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('sump')}>
-                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#16a34a" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Sump</span>
-                            </div>
-
-                            {/* Overhead Tank */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'oht' ? 'bg-blue-100 ring-2 ring-blue-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('oht')}>
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#2563eb" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Overhead Tank</span>
-                            </div>
-
-                            {/* Borewell (IIIT) */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'borewell' ? 'bg-yellow-100 ring-2 ring-yellow-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('borewell')}>
-                                <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#eab308" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Borewell (IIIT)</span>
-                            </div>
-
-                            {/* Borewell (Govt) */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'govtborewell' ? 'bg-slate-200 ring-2 ring-slate-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('govtborewell')}>
-                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#1e293b" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Borewell (Govt)</span>
-                            </div>
-
-                            {/* Non-Working */}
-                            <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activeFilter === 'nonworking' ? 'bg-red-100 ring-2 ring-red-400' : 'hover:bg-slate-50')} onClick={() => handleFilterClick('nonworking')}>
-                                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 shadow-sm">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#ef4444" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-map-pin"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-                                </div>
-                                <span className="text-sm font-semibold text-slate-700">Non-Working</span>
-                            </div>
-                        </div>
-
-                        <div className="my-2 border-t border-slate-100"></div>
-
-                        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">PIPELINES</h2>
-
-                        {/* Water Supply */}
-                        <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activePipeline === 'watersupply' ? 'bg-cyan-100 ring-2 ring-cyan-400' : 'hover:bg-slate-50')} onClick={() => handlePipelineClick('watersupply')}>
-                            <div className="w-8 h-8 flex items-center justify-center">
-                                <div className="w-full h-1 bg-[#00b4d8] rounded-full shadow-sm"></div>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-700">Water Supply</span>
-                        </div>
-
-                        {/* Borewell Water */}
-                        <div className={clsx("flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 transition-all", activePipeline === 'borewellwater' ? 'bg-indigo-100 ring-2 ring-indigo-400' : 'hover:bg-slate-50')} onClick={() => handlePipelineClick('borewellwater')}>
-                            <div className="w-8 h-8 flex items-center justify-center">
-                                <div className="w-full h-1 bg-[#000080] rounded-full shadow-sm"></div>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-700">Borewell Water</span>
-                        </div>
-                    </div>
-
-                </div>
             </div>
         </div>
     );
 };
+
+export default Home;

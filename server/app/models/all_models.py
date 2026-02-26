@@ -60,6 +60,8 @@ class Customer(Base):
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     supabase_user_id: Mapped[str] = mapped_column(String, unique=True, nullable=True)
     contact_number: Mapped[str] = mapped_column(String, nullable=True)
+    city: Mapped[str] = mapped_column(String, nullable=True)
+    company_name: Mapped[str] = mapped_column(String, nullable=True)
     joining_date: Mapped[Date] = mapped_column(Date, default=datetime.utcnow().date())
     status: Mapped[str] = mapped_column(String, default="active")
     metadata_json: Mapped[dict] = mapped_column(JSON, default={}, name="metadata")
@@ -115,6 +117,16 @@ class Node(Base):
     thingspeak_read_api_key: Mapped[str] = mapped_column(String, nullable=True)
     created_by: Mapped[str] = mapped_column(String, nullable=True)
     
+    # IIIT H specific
+    sampling_rate: Mapped[int] = mapped_column(Integer, default=60)
+    threshold_low: Mapped[float] = mapped_column(Float, default=20.0)
+    threshold_high: Mapped[float] = mapped_column(Float, default=90.0)
+    sms_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    dashboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    logic_inverted: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_individual: Mapped[bool] = mapped_column(Boolean, default=False)
+    metrics_config: Mapped[dict] = mapped_column(JSON, default={"show_water_level": True, "show_tds": True, "show_borewell": False})
+    
     # Tenancy
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
     community_id: Mapped[str] = mapped_column(ForeignKey("communities.id"), nullable=True, index=True)
@@ -128,7 +140,7 @@ class Node(Base):
     config_tank = relationship("DeviceConfigTank", back_populates="device", uselist=False)
     config_deep = relationship("DeviceConfigDeep", back_populates="device", uselist=False)
     config_flow = relationship("DeviceConfigFlow", back_populates="device", uselist=False)
-    thingspeak_mapping = relationship("DeviceThingSpeakMapping", back_populates="device", uselist=False)
+    thingspeak_mappings = relationship("DeviceThingSpeakMapping", back_populates="device", cascade="all, delete-orphan")
 
 # ─── SPECIALIZED CONFIG MODELS ───
 
@@ -158,13 +170,14 @@ class DeviceConfigFlow(Base):
 
 class DeviceThingSpeakMapping(Base):
     __tablename__ = "device_thingspeak_mapping"
-    device_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"), primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"), index=True)
     channel_id: Mapped[str] = mapped_column(String, nullable=False)
     read_api_key: Mapped[str] = mapped_column(String, nullable=True)
     write_api_key: Mapped[str] = mapped_column(String, nullable=True)
     field_mapping: Mapped[dict] = mapped_column(JSON, default={})
     last_sync_time: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    device = relationship("Node", back_populates="thingspeak_mapping")
+    device = relationship("Node", back_populates="thingspeak_mappings")
 
 # ─── UTILITY MODELS ───
 
@@ -216,3 +229,31 @@ class NodeAnalytics(Base):
     peak_flow: Mapped[float] = mapped_column(Float, nullable=True)
     analytics_metadata: Mapped[dict] = mapped_column(JSON, nullable=True, name="metadata")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+# ─── ALERTING MODELS ───
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"), index=True)
+    metric: Mapped[str] = mapped_column(String) # e.g. "flow_rate", "tds"
+    operator: Mapped[str] = mapped_column(String) # ">", "<", "==" 
+    threshold: Mapped[float] = mapped_column(Float)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    node = relationship("Node")
+
+class AlertHistory(Base):
+    __tablename__ = "alert_history"
+    
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"), index=True)
+    rule_id: Mapped[str] = mapped_column(ForeignKey("alert_rules.id"), index=True)
+    value_at_time: Mapped[float] = mapped_column(Float)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    resolved_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    
+    node = relationship("Node")
+    rule = relationship("AlertRule")

@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 
-// Use the exact working configuration that we tested
+// Use the anonymous key for client-side authentication
 const supabaseUrl = 'https://lkbesdmtazmgzujjoixf.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYmVzZG10YXptZ3p1ampvaXhmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTkwNDUxNiwiZXhwIjoyMDg3NDgwNTE2fQ.PJY5V-v6P1IT35Kp58Wn9BXn6es6QQTbDwKPmEgEIeI';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2xrYmVzZG10YXptZ3p1ampvaXhmLnN1cGFiYXNlLmNvIiwic3ViIjoiYW5vbnltb3VzIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MjA4NzQ2NjYyMywiaWF0IjoxNzcyMTA2NjIzLCJyb2xlIjoiYW5vbiIsImFsZyI6IkhTMjU2In0.KLM72nGwoAVwlUdpBI26H8aF-4HFRo1IjXJPoe71skA';
 
 console.log('🔍 Supabase Configuration:', {
     url: supabaseUrl,

@@ -20,14 +20,14 @@ app = FastAPI(title="EvaraTech Backend", version="1.0.0")
 # Configure CORS to allow requests from the React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"], # Temporarily allowing all origins for debugging CORS issues
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"]) # In prod, restrict this!
+# app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"]) # Removed to avoid potential 400s with some requests
 
 # ─── RATE LIMITING MIDDLEWARE ───
 class RateLimiter:
@@ -85,15 +85,13 @@ logger = setup_logging()
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting EvaraTech Backend...")
-    try:
-        # Initialize database tables
-        await create_tables()
-        # Auto-seed if database is new/empty
-        await seed_db()
-        await start_background_tasks()
-        logger.info("Background tasks started.")
-    except Exception as e:
-        logger.error(f"Startup task failed (DB might be unreachable): {e}")
+    # Initialize database tables
+    await create_tables()
+    # Auto-seed if database is new/empty
+    await seed_db()
+    await start_background_tasks()
+    logger.info("Background tasks started.")
+    logger.info("Application startup complete.")
 
 @app.get("/health")
 async def health_check():

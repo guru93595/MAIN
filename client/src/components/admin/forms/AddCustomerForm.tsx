@@ -3,7 +3,15 @@ import { adminService } from '../../../services/admin';
 import { Loader2 } from 'lucide-react';
 
 export const AddCustomerForm = ({ onSubmit, onCancel }: { onSubmit: (data: any) => void; onCancel: () => void }) => {
-    const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', community: '' });
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        community: '',
+        city: '',
+        company: ''
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -18,11 +26,13 @@ export const AddCustomerForm = ({ onSubmit, onCancel }: { onSubmit: (data: any) 
 
         try {
             const result = await adminService.createCustomer({
-                name: formData.name,
+                full_name: formData.name,
                 email: formData.email,
                 community_id: formData.community,
                 password: formData.password,
-                contact_number: formData.phone
+                contact_number: formData.phone,
+                city: formData.city,
+                company_name: formData.company
             });
             onSubmit(result);
         } catch (err) {
@@ -98,6 +108,29 @@ export const AddCustomerForm = ({ onSubmit, onCancel }: { onSubmit: (data: any) 
                     <option value="1">Greenwood Heights</option>
                     <option value="2">Cyber Towers</option>
                 </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className={labelCls}>City</label>
+                    <input
+                        value={formData.city}
+                        onChange={e => handleChange('city', e.target.value)}
+                        placeholder="e.g. Hyderabad"
+                        className={inputCls}
+                        disabled={loading}
+                    />
+                </div>
+                <div>
+                    <label className={labelCls}>Company Name</label>
+                    <input
+                        value={formData.company}
+                        onChange={e => handleChange('company', e.target.value)}
+                        placeholder="e.g. Acme Corp"
+                        className={inputCls}
+                        disabled={loading}
+                    />
+                </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">

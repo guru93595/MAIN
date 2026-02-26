@@ -1,51 +1,121 @@
 import { useState } from 'react';
 import { adminService } from '../../../services/admin';
-import { Loader2, Database, Wifi, MapPin, Settings2, User, ChevronRight, Check } from 'lucide-react';
+import { Loader2, Database, Wifi, MapPin, Settings2, User, ChevronRight, Download } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+
+const LocationMarker = ({ lat, lng, onChange }: { lat: string, lng: string, onChange: (lat: string, lng: string) => void }) => {
+    const map = useMap();
+    useMapEvents({
+        click(e) {
+            onChange(e.latlng.lat.toFixed(6), e.latlng.lng.toFixed(6));
+        },
+    });
+
+    // Automatically fly to new coordinates if they change significantly
+    if (lat && lng) {
+        map.flyTo([parseFloat(lat), parseFloat(lng)], map.getZoom(), {
+            animate: true,
+            duration: 1
+        });
+    }
+
+    const pos: [number, number] = (lat && lng) ? [parseFloat(lat), parseFloat(lng)] : [17.4455, 78.3510];
+    return (lat && lng) ? <Marker position={pos} /> : null;
+};
 
 interface AddDeviceFormProps {
     onSubmit: (data: any) => void;
     onCancel: () => void;
     communities: any[];
     customers: any[];
+    initialData?: any;
 }
 
-export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: AddDeviceFormProps) => {
+export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, initialData }: AddDeviceFormProps) => {
     const [step, setStep] = useState(1); // 1 = Identity, 2 = Config
     const [loading, setLoading] = useState(false);
+    const [fetchingFields, setFetchingFields] = useState(false);
+    const [thingspeakFields, setThingspeakFields] = useState<Record<string, string>>({});
     const [error, setError] = useState('');
 
     // Form State
     const [formData, setFormData] = useState({
-        hardware_id: '',
-        device_label: '',
-        device_type: 'tank', // physical category
-        analytics_type: 'EvaraTank', // software template
-        community_id: '',
-        customer_id: '',
-        lat: '',
-        long: '',
+        hardware_id: initialData?.hardware_id || initialData?.node_key || '',
+        device_label: initialData?.device_label || initialData?.label || '',
+        device_type: initialData?.device_type || initialData?.category || 'tank',
+        analytics_type: initialData?.analytics_type || 'EvaraTank',
+        community_id: initialData?.community_id || '',
+        customer_id: initialData?.customer_id || '',
+        lat: initialData?.lat?.toString() || '',
+        long: (initialData?.lng || initialData?.long || '').toString(),
         thingspeak: {
-            channel_id: '',
-            read_api_key: '',
-            write_api_key: '',
-            field_mapping: {
+            channel_id: initialData?.thingspeak_mapping?.channel_id || '',
+            read_api_key: initialData?.thingspeak_mapping?.read_api_key || '',
+            field_mapping: initialData?.thingspeak_mapping?.field_mapping || {
                 level: 'field1',
                 battery: 'field2',
                 signal: 'field3'
-            } as Record<string, string>
+            }
         },
         config: {
-            capacity: '',
-            max_depth: '',
-            static_depth: '',
-            dynamic_depth: '',
-            recharge_threshold: '',
-            pipe_diameter: '',
-            max_flow_rate: ''
+            capacity: initialData?.config_tank?.capacity?.toString() || '',
+            max_depth: initialData?.config_tank?.max_depth?.toString() || '',
+            static_depth: initialData?.config_deep?.static_depth?.toString() || '',
+            dynamic_depth: initialData?.config_deep?.dynamic_depth?.toString() || '',
+            recharge_threshold: initialData?.config_deep?.recharge_threshold?.toString() || '',
+            pipe_diameter: initialData?.config_flow?.pipe_diameter?.toString() || '',
+            max_flow_rate: initialData?.config_flow?.max_flow_rate?.toString() || ''
         }
     });
 
     const filteredCustomers = customers.filter(c => !formData.community_id || c.community_id === formData.community_id);
+
+    const handleFetchThingSpeak = async () => {
+        if (!formData.thingspeak.channel_id || !formData.thingspeak.read_api_key) {
+            setError('Channel ID and Read API Key are required to fetch fields.');
+            return;
+        }
+        setFetchingFields(true);
+        setError('');
+        try {
+            const url = `https://api.thingspeak.com/channels/${formData.thingspeak.channel_id}/feeds.json?results=1&api_key=${formData.thingspeak.read_api_key}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Failed to fetch from ThingSpeak. Check keys.');
+            const data = await res.json();
+            const channel = data.channel;
+            const fields: Record<string, string> = {};
+            for (let i = 1; i <= 8; i++) {
+                if (channel[`field${i}`]) fields[`field${i}`] = channel[`field${i}`];
+            }
+            if (Object.keys(fields).length === 0) throw new Error('No fields configured in this channel.');
+            setThingspeakFields(fields);
+        } catch (err: any) {
+            setError(err.message || 'Error fetching fields');
+        } finally {
+            setFetchingFields(false);
+        }
+    };
+
+    const handleLocateMe = () => {
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setFormData(prev => ({
+                        ...prev,
+                        lat: position.coords.latitude.toFixed(6),
+                        long: position.coords.longitude.toFixed(6)
+                    }));
+                },
+                (err) => {
+                    setError('Unable to retrieve your location. Check permissions.');
+                    console.error(err);
+                },
+                { enableHighAccuracy: true }
+            );
+        } else {
+            setError('Geolocation is not supported by your browser.');
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +123,7 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
         setError('');
 
         try {
-            // Prepare payload
+            // Prepare payload with all required fields
             const payload: any = {
                 hardware_id: formData.hardware_id,
                 device_label: formData.device_label,
@@ -62,13 +132,12 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                 community_id: formData.community_id || null,
                 customer_id: formData.customer_id || null,
                 lat: formData.lat ? parseFloat(formData.lat) : null,
-                long: formData.long ? parseFloat(formData.long) : null,
-                thingspeak_mapping: formData.thingspeak.channel_id ? {
+                long: formData.long ? parseFloat(formData.long) : null, // Backend expects 'long'
+                thingspeak_mappings: formData.thingspeak.channel_id ? [{
                     channel_id: formData.thingspeak.channel_id,
                     read_api_key: formData.thingspeak.read_api_key,
-                    write_api_key: formData.thingspeak.write_api_key,
                     field_mapping: formData.thingspeak.field_mapping
-                } : null
+                }] : null
             };
 
             // Add specialized config
@@ -91,10 +160,15 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                 };
             }
 
-            const result = await adminService.createDevice(payload);
+            let result;
+            if (initialData?.id) {
+                result = await adminService.updateDevice(initialData.id, payload);
+            } else {
+                result = await adminService.createDevice(payload);
+            }
             onSubmit(result);
         } catch (err: any) {
-            setError(err.response?.data?.detail || 'Failed to provision device.');
+            setError(err.response?.data?.detail || `Failed to ${initialData ? 'update' : 'provision'} device.`);
             console.error(err);
         } finally {
             setLoading(false);
@@ -235,29 +309,28 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                                             autoFocus
                                         />
                                     </div>
-                                    <div>
+                                    <div className="col-span-2">
                                         <label className={labelCls}>Read API Key</label>
-                                        <input
-                                            value={formData.thingspeak.read_api_key}
-                                            onChange={e => setFormData({
-                                                ...formData,
-                                                thingspeak: { ...formData.thingspeak, read_api_key: e.target.value }
-                                            })}
-                                            placeholder="ABC123XYZ"
-                                            className={inputCls}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className={labelCls}>Write API Key (Optional)</label>
-                                        <input
-                                            value={formData.thingspeak.write_api_key}
-                                            onChange={e => setFormData({
-                                                ...formData,
-                                                thingspeak: { ...formData.thingspeak, write_api_key: e.target.value }
-                                            })}
-                                            placeholder="Optional"
-                                            className={inputCls}
-                                        />
+                                        <div className="flex flex-row gap-3">
+                                            <input
+                                                value={formData.thingspeak.read_api_key}
+                                                onChange={e => setFormData({
+                                                    ...formData,
+                                                    thingspeak: { ...formData.thingspeak, read_api_key: e.target.value }
+                                                })}
+                                                placeholder="Read API Key"
+                                                className={`${inputCls} flex-1`}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleFetchThingSpeak}
+                                                disabled={fetchingFields}
+                                                className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-bold rounded-xl border border-blue-200 transition-colors whitespace-nowrap"
+                                            >
+                                                {fetchingFields ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                                {fetchingFields ? 'Fetching...' : 'Fetch Fields'}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
@@ -268,7 +341,7 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                                                 <label className="text-[9px] font-bold text-blue-600 block mb-1 uppercase pl-1">{param}</label>
                                                 <select
                                                     className="w-full text-xs p-1.5 border border-blue-200 rounded-lg outline-none bg-white"
-                                                    value={mapped}
+                                                    value={mapped as string}
                                                     onChange={e => setFormData({
                                                         ...formData,
                                                         thingspeak: {
@@ -277,7 +350,12 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                                                         }
                                                     })}
                                                 >
-                                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={`field${n}`}>Field {n}</option>)}
+                                                    {Object.keys(thingspeakFields).length > 0
+                                                        ? Object.entries(thingspeakFields).map(([fKey, fName]) => (
+                                                            <option key={fKey} value={fKey}>{fKey}: {fName}</option>
+                                                        ))
+                                                        : [1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={`field${n}`}>Field {n}</option>)
+                                                    }
                                                 </select>
                                             </div>
                                         ))}
@@ -371,8 +449,17 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
 
                         {/* 5. Geography */}
                         <div className="mb-4">
-                            <h3 className={sectionTitleCls}><MapPin size={14} /> Geographic Placement</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className={`${sectionTitleCls} mb-0`}><MapPin size={14} /> Geographic Placement (Click map to set)</h3>
+                                <button
+                                    type="button"
+                                    onClick={handleLocateMe}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-colors"
+                                >
+                                    <MapPin size={12} /> Use My Location
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
                                     <label className={labelCls}>Latitude</label>
                                     <input
@@ -395,6 +482,23 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                                         className={inputCls}
                                     />
                                 </div>
+                            </div>
+                            <div className="h-48 w-full rounded-2xl overflow-hidden border border-slate-200 z-10 relative">
+                                <MapContainer
+                                    center={[17.4455, 78.3510]}
+                                    zoom={10}
+                                    style={{ height: '100%', width: '100%' }}
+                                >
+                                    <TileLayer
+                                        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    />
+                                    <LocationMarker
+                                        lat={formData.lat}
+                                        lng={formData.long}
+                                        onChange={(lat, lng) => setFormData({ ...formData, lat, long: lng })}
+                                    />
+                                </MapContainer>
                             </div>
                         </div>
                     </div>
@@ -423,13 +527,13 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers }: Ad
                     </button>
                 ) : (
                     <button
-                        type="submit"
+                        type="button"
                         onClick={handleSubmit}
                         disabled={loading}
                         className="flex items-center gap-3 px-8 py-2.5 bg-green-600 text-white text-sm font-bold rounded-2xl hover:bg-green-700 shadow-lg shadow-green-200 transition-all disabled:opacity-50"
                     >
                         {loading && <Loader2 size={16} className="animate-spin" />}
-                        {loading ? 'Commissioning...' : 'Commission Node'}
+                        {loading ? (initialData ? 'Updating...' : 'Commissioning...') : (initialData ? 'Update Node' : 'Commission Node')}
                     </button>
                 )}
             </div>

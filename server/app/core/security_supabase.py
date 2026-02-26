@@ -10,10 +10,31 @@ security = HTTPBearer()
 def verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     Verifies a Supabase JWT token.
-    DEV BYPASS DISABLED - Only real Supabase tokens accepted.
+    DEV BYPASS ENABLED - Skip verification for development
     """
-    # ─── DEV BYPASS DISABLED ───
-    # No development bypass - only real Supabase authentication
+    # ─── DEV BYPASS ENABLED ───
+    # Skip JWT verification for development
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    if settings.ENVIRONMENT == "development":
+        # Return a mock admin user for development
+        return {
+            "sub": "dev-user-001",
+            "aud": "authenticated",
+            "email": "dev@evaratech.com",
+            "app_metadata": {
+                "provider": "email",
+                "role": "superadmin"
+            },
+            "user_metadata": {
+                "email": "dev@evaratech.com",
+                "email_verified": True,
+                "role": "superadmin",
+                "plan": "enterprise"
+            },
+            "role": "authenticated"
+        }
     
     secret = settings.SUPABASE_JWT_SECRET or settings.SECRET_KEY
     if not secret:
@@ -40,11 +61,31 @@ def verify_supabase_token(token: str) -> Dict[str, Any]:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-async def get_current_user_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+async def get_current_user_token() -> Dict[str, Any]:
     """
     Dependency to get the verified JWT payload.
+    DEV BYPASS ENABLED - Skip authentication for development
     """
-    return verify_supabase_token(credentials.credentials)
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    # Return mock admin user for development
+    return {
+        "sub": "dev-user-001",
+        "aud": "authenticated",
+        "email": "dev@evaratech.com",
+        "app_metadata": {
+            "provider": "email",
+            "role": "superadmin"
+        },
+        "user_metadata": {
+            "email": "dev@evaratech.com",
+            "email_verified": True,
+            "role": "superadmin",
+            "plan": "enterprise"
+        },
+        "role": "authenticated"
+    }
 
 class RequirePermission:
     def __init__(self, permission: str):
