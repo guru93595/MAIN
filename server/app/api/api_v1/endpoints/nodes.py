@@ -79,9 +79,12 @@ async def create_node(
             from app.models.all_models import DeviceConfigTank
             config = DeviceConfigTank(
                 device_id=node.id,
-                capacity=node_in.config_tank.get("capacity"),
-                max_depth=node_in.config_tank.get("max_depth"),
-                temp_enabled=node_in.config_tank.get("temp_enabled", False)
+                tank_shape=node_in.config_tank.get("tank_shape"),
+                dimension_unit=node_in.config_tank.get("dimension_unit", "m"),
+                radius=node_in.config_tank.get("radius"),
+                height=node_in.config_tank.get("height"),
+                length=node_in.config_tank.get("length"),
+                breadth=node_in.config_tank.get("breadth")
             )
             db.add(config)
             
@@ -145,14 +148,6 @@ async def read_nodes(
                 "thingspeak_channel_id": getattr(node, "thingspeak_channel_id", None),
                 "thingspeak_read_api_key": None,  # Never expose keys in list view
                 "created_by": getattr(node, "created_by", None),
-                # IIIT H specific fields
-                "sampling_rate": getattr(node, "sampling_rate", None),
-                "threshold_low": getattr(node, "threshold_low", None),
-                "threshold_high": getattr(node, "threshold_high", None),
-                "sms_enabled": getattr(node, "sms_enabled", None),
-                "dashboard_visible": getattr(node, "dashboard_visible", None),
-                "logic_inverted": getattr(node, "logic_inverted", None),
-                "is_individual": getattr(node, "is_individual", None),
             }
             for node in nodes
         ]
@@ -220,9 +215,12 @@ async def update_node(
             # Add new config
             config = DeviceConfigTank(
                 device_id=node_id,
-                capacity=node_in.config_tank.get("capacity"),
-                max_depth=node_in.config_tank.get("max_depth"),
-                temp_enabled=node_in.config_tank.get("temp_enabled", False)
+                tank_shape=node_in.config_tank.get("tank_shape"),
+                dimension_unit=node_in.config_tank.get("dimension_unit", "m"),
+                radius=node_in.config_tank.get("radius"),
+                height=node_in.config_tank.get("height"),
+                length=node_in.config_tank.get("length"),
+                breadth=node_in.config_tank.get("breadth")
             )
             db.add(config)
             

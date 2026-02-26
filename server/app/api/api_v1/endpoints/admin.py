@@ -364,14 +364,6 @@ async def create_node(
         customer_id=node_in.customer_id,
         community_id=node_in.community_id,
         distributor_id=node_in.distributor_id,
-        sampling_rate=node_in.sampling_rate,
-        threshold_low=node_in.threshold_low,
-        threshold_high=node_in.threshold_high,
-        sms_enabled=node_in.sms_enabled,
-        dashboard_visible=node_in.dashboard_visible,
-        logic_inverted=node_in.logic_inverted,
-        is_individual=node_in.is_individual,
-        metrics_config=node_in.metrics_config,
         created_by=user.get("sub")
     )
     db.add(db_obj)

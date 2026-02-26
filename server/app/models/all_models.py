@@ -117,16 +117,6 @@ class Node(Base):
     thingspeak_read_api_key: Mapped[str] = mapped_column(String, nullable=True)
     created_by: Mapped[str] = mapped_column(String, nullable=True)
     
-    # IIIT H specific
-    sampling_rate: Mapped[int] = mapped_column(Integer, default=60)
-    threshold_low: Mapped[float] = mapped_column(Float, default=20.0)
-    threshold_high: Mapped[float] = mapped_column(Float, default=90.0)
-    sms_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    dashboard_visible: Mapped[bool] = mapped_column(Boolean, default=True)
-    logic_inverted: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_individual: Mapped[bool] = mapped_column(Boolean, default=False)
-    metrics_config: Mapped[dict] = mapped_column(JSON, default={"show_water_level": True, "show_tds": True, "show_borewell": False})
-    
     # Tenancy
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
     community_id: Mapped[str] = mapped_column(ForeignKey("communities.id"), nullable=True, index=True)
@@ -147,9 +137,12 @@ class Node(Base):
 class DeviceConfigTank(Base):
     __tablename__ = "device_config_tank"
     device_id: Mapped[str] = mapped_column(ForeignKey("nodes.id"), primary_key=True)
-    capacity: Mapped[int] = mapped_column(Integer, nullable=True)
-    max_depth: Mapped[float] = mapped_column(Float, nullable=True)
-    temp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    tank_shape: Mapped[str] = mapped_column(String, nullable=True)  # 'cylinder' or 'rectangular'
+    dimension_unit: Mapped[str] = mapped_column(String, default="m")  # m, cm, feet, inches
+    radius: Mapped[float] = mapped_column(Float, nullable=True)  # For cylinder
+    height: Mapped[float] = mapped_column(Float, nullable=True)  # Both shapes
+    length: Mapped[float] = mapped_column(Float, nullable=True)  # For rectangular
+    breadth: Mapped[float] = mapped_column(Float, nullable=True)  # For rectangular
     device = relationship("Node", back_populates="config_tank")
 
 class DeviceConfigDeep(Base):

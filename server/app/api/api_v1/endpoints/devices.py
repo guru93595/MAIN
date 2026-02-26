@@ -258,7 +258,14 @@ async def get_device_live_data(
     # Extract specialized config based on node type
     specialized_config = {}
     if node.analytics_type == "EvaraTank" and node.config_tank:
-        specialized_config = {"capacity": node.config_tank.capacity, "max_depth": node.config_tank.max_depth}
+        specialized_config = {
+            "tank_shape": node.config_tank.tank_shape,
+            "dimension_unit": node.config_tank.dimension_unit,
+            "radius": node.config_tank.radius,
+            "height": node.config_tank.height,
+            "length": node.config_tank.length,
+            "breadth": node.config_tank.breadth
+        }
     elif node.analytics_type == "EvaraDeep" and node.config_deep:
         specialized_config = {"static_depth": node.config_deep.static_depth, "dynamic_depth": node.config_deep.dynamic_depth}
     elif node.analytics_type == "EvaraFlow" and node.config_flow:
@@ -268,15 +275,7 @@ async def get_device_live_data(
         "device_id": node_id,
         "timestamp": data.get("timestamp"),
         "metrics": {k: v for k, v in data.items() if k not in ["timestamp", "entry_id"]},
-        "config": specialized_config,
-        "settings": {
-            "sampling_rate": node.sampling_rate,
-            "threshold_low": node.threshold_low,
-            "threshold_high": node.threshold_high,
-            "sms_enabled": node.sms_enabled,
-            "dashboard_visible": node.dashboard_visible,
-            "logic_inverted": node.logic_inverted
-        }
+        "config": specialized_config
     }
     
     live_telemetry_cache[node_id] = (now, response)

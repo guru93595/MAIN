@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { adminService } from '../../../services/admin';
-import { Loader2, Database, Wifi, MapPin, Settings2, User, ChevronRight, Download } from 'lucide-react';
+import { Loader2, Database, Wifi, MapPin, Settings2, User, ChevronRight } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 
 const LocationMarker = ({ lat, lng, onChange }: { lat: string, lng: string, onChange: (lat: string, lng: string) => void }) => {
@@ -34,8 +34,6 @@ interface AddDeviceFormProps {
 export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, initialData }: AddDeviceFormProps) => {
     const [step, setStep] = useState(1); // 1 = Identity, 2 = Config
     const [loading, setLoading] = useState(false);
-    const [fetchingFields, setFetchingFields] = useState(false);
-    const [thingspeakFields, setThingspeakFields] = useState<Record<string, string>>({});
     const [error, setError] = useState('');
 
     // Form State
@@ -51,50 +49,26 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
         thingspeak: {
             channel_id: initialData?.thingspeak_mapping?.channel_id || '',
             read_api_key: initialData?.thingspeak_mapping?.read_api_key || '',
-            field_mapping: initialData?.thingspeak_mapping?.field_mapping || {
-                level: 'field1',
-                battery: 'field2',
-                signal: 'field3'
-            }
         },
         config: {
-            capacity: initialData?.config_tank?.capacity?.toString() || '',
-            max_depth: initialData?.config_tank?.max_depth?.toString() || '',
+            // EvaraTank - Tank Shape Details
+            tank_shape: initialData?.config_tank?.tank_shape || 'cylinder',
+            dimension_unit: initialData?.config_tank?.dimension_unit || 'm',
+            radius: initialData?.config_tank?.radius?.toString() || '',
+            height: initialData?.config_tank?.height?.toString() || '',
+            length: initialData?.config_tank?.length?.toString() || '',
+            breadth: initialData?.config_tank?.breadth?.toString() || '',
+            // EvaraDeep
             static_depth: initialData?.config_deep?.static_depth?.toString() || '',
             dynamic_depth: initialData?.config_deep?.dynamic_depth?.toString() || '',
             recharge_threshold: initialData?.config_deep?.recharge_threshold?.toString() || '',
+            // EvaraFlow
             pipe_diameter: initialData?.config_flow?.pipe_diameter?.toString() || '',
             max_flow_rate: initialData?.config_flow?.max_flow_rate?.toString() || ''
         }
     });
 
     const filteredCustomers = customers.filter(c => !formData.community_id || c.community_id === formData.community_id);
-
-    const handleFetchThingSpeak = async () => {
-        if (!formData.thingspeak.channel_id || !formData.thingspeak.read_api_key) {
-            setError('Channel ID and Read API Key are required to fetch fields.');
-            return;
-        }
-        setFetchingFields(true);
-        setError('');
-        try {
-            const url = `https://api.thingspeak.com/channels/${formData.thingspeak.channel_id}/feeds.json?results=1&api_key=${formData.thingspeak.read_api_key}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('Failed to fetch from ThingSpeak. Check keys.');
-            const data = await res.json();
-            const channel = data.channel;
-            const fields: Record<string, string> = {};
-            for (let i = 1; i <= 8; i++) {
-                if (channel[`field${i}`]) fields[`field${i}`] = channel[`field${i}`];
-            }
-            if (Object.keys(fields).length === 0) throw new Error('No fields configured in this channel.');
-            setThingspeakFields(fields);
-        } catch (err: any) {
-            setError(err.message || 'Error fetching fields');
-        } finally {
-            setFetchingFields(false);
-        }
-    };
 
     const handleLocateMe = () => {
         if ('geolocation' in navigator) {
@@ -132,21 +106,28 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
                 community_id: formData.community_id || null,
                 customer_id: formData.customer_id || null,
                 lat: formData.lat ? parseFloat(formData.lat) : null,
-                long: formData.long ? parseFloat(formData.long) : null, // Backend expects 'long'
+                long: formData.long ? parseFloat(formData.long) : null,
                 thingspeak_mappings: formData.thingspeak.channel_id ? [{
                     channel_id: formData.thingspeak.channel_id,
                     read_api_key: formData.thingspeak.read_api_key,
-                    field_mapping: formData.thingspeak.field_mapping
                 }] : null
             };
 
             // Add specialized config
             const cfg = formData.config;
             if (formData.analytics_type === 'EvaraTank') {
-                payload.config_tank = {
-                    capacity: parseInt(cfg.capacity) || 0,
-                    max_depth: parseFloat(cfg.max_depth) || 0
+                const tankConfig: any = {
+                    tank_shape: cfg.tank_shape,
+                    dimension_unit: cfg.dimension_unit,
+                    height: parseFloat(cfg.height) || null,
                 };
+                if (cfg.tank_shape === 'cylinder') {
+                    tankConfig.radius = parseFloat(cfg.radius) || null;
+                } else {
+                    tankConfig.length = parseFloat(cfg.length) || null;
+                    tankConfig.breadth = parseFloat(cfg.breadth) || null;
+                }
+                payload.config_tank = tankConfig;
             } else if (formData.analytics_type === 'EvaraDeep') {
                 payload.config_deep = {
                     static_depth: parseFloat(cfg.static_depth) || 0,
@@ -186,6 +167,10 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${current >= 2 ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</div>
         </div>
     );
+
+    const unitLabel = formData.config.dimension_unit === 'm' ? 'Meters' :
+        formData.config.dimension_unit === 'cm' ? 'cm' :
+            formData.config.dimension_unit === 'feet' ? 'Feet' : 'Inches';
 
     return (
         <div className="flex flex-col h-[75vh]">
@@ -294,8 +279,8 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
                         <div>
                             <h3 className={sectionTitleCls}><Wifi size={14} /> Telemetry Handshake</h3>
                             <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div className="col-span-2">
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
                                         <label className={labelCls}>ThingSpeak Channel ID</label>
                                         <input
                                             required
@@ -309,56 +294,17 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
                                             autoFocus
                                         />
                                     </div>
-                                    <div className="col-span-2">
+                                    <div>
                                         <label className={labelCls}>Read API Key</label>
-                                        <div className="flex flex-row gap-3">
-                                            <input
-                                                value={formData.thingspeak.read_api_key}
-                                                onChange={e => setFormData({
-                                                    ...formData,
-                                                    thingspeak: { ...formData.thingspeak, read_api_key: e.target.value }
-                                                })}
-                                                placeholder="Read API Key"
-                                                className={`${inputCls} flex-1`}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleFetchThingSpeak}
-                                                disabled={fetchingFields}
-                                                className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-bold rounded-xl border border-blue-200 transition-colors whitespace-nowrap"
-                                            >
-                                                {fetchingFields ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                                                {fetchingFields ? 'Fetching...' : 'Fetch Fields'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                                    <p className={labelCls} style={{ marginBottom: '8px' }}>Field Parameter Mapping</p>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {Object.entries(formData.thingspeak.field_mapping).map(([param, mapped]) => (
-                                            <div key={param}>
-                                                <label className="text-[9px] font-bold text-blue-600 block mb-1 uppercase pl-1">{param}</label>
-                                                <select
-                                                    className="w-full text-xs p-1.5 border border-blue-200 rounded-lg outline-none bg-white"
-                                                    value={mapped as string}
-                                                    onChange={e => setFormData({
-                                                        ...formData,
-                                                        thingspeak: {
-                                                            ...formData.thingspeak,
-                                                            field_mapping: { ...formData.thingspeak.field_mapping, [param]: e.target.value }
-                                                        }
-                                                    })}
-                                                >
-                                                    {Object.keys(thingspeakFields).length > 0
-                                                        ? Object.entries(thingspeakFields).map(([fKey, fName]) => (
-                                                            <option key={fKey} value={fKey}>{fKey}: {fName}</option>
-                                                        ))
-                                                        : [1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={`field${n}`}>Field {n}</option>)
-                                                    }
-                                                </select>
-                                            </div>
-                                        ))}
+                                        <input
+                                            value={formData.thingspeak.read_api_key}
+                                            onChange={e => setFormData({
+                                                ...formData,
+                                                thingspeak: { ...formData.thingspeak, read_api_key: e.target.value }
+                                            })}
+                                            placeholder="e.g. ABCD1234EFGH5678"
+                                            className={inputCls}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -369,26 +315,104 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
                             <h3 className={sectionTitleCls}><Settings2 size={14} /> Physical Specifications</h3>
                             <div className="p-5 bg-green-50/30 rounded-2xl border border-green-100">
                                 {formData.analytics_type === 'EvaraTank' && (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={labelCls}>Capacity (Liters)</label>
-                                            <input
-                                                type="number"
-                                                value={formData.config.capacity}
-                                                onChange={e => setFormData({ ...formData, config: { ...formData.config, capacity: e.target.value } })}
-                                                className={inputCls}
-                                            />
+                                    <div className="space-y-4">
+                                        {/* Tank Shape & Unit Row */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className={labelCls}>Tank Shape</label>
+                                                <select
+                                                    className={inputCls}
+                                                    value={formData.config.tank_shape}
+                                                    onChange={e => setFormData({
+                                                        ...formData,
+                                                        config: { ...formData.config, tank_shape: e.target.value, radius: '', length: '', breadth: '' }
+                                                    })}
+                                                >
+                                                    <option value="cylinder">Cylinder</option>
+                                                    <option value="rectangular">Rectangular / Square</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className={labelCls}>Dimension Unit</label>
+                                                <select
+                                                    className={inputCls}
+                                                    value={formData.config.dimension_unit}
+                                                    onChange={e => setFormData({
+                                                        ...formData,
+                                                        config: { ...formData.config, dimension_unit: e.target.value }
+                                                    })}
+                                                >
+                                                    <option value="m">Meters (m)</option>
+                                                    <option value="cm">Centimeters (cm)</option>
+                                                    <option value="feet">Feet (ft)</option>
+                                                    <option value="inches">Inches (in)</option>
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className={labelCls}>Max Depth (Meters)</label>
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                value={formData.config.max_depth}
-                                                onChange={e => setFormData({ ...formData, config: { ...formData.config, max_depth: e.target.value } })}
-                                                className={inputCls}
-                                            />
-                                        </div>
+
+                                        {/* Dimension inputs based on shape */}
+                                        {formData.config.tank_shape === 'cylinder' ? (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className={labelCls}>Radius ({unitLabel})</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.config.radius}
+                                                        onChange={e => setFormData({ ...formData, config: { ...formData.config, radius: e.target.value } })}
+                                                        placeholder="e.g. 1.5"
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Height ({unitLabel})</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.config.height}
+                                                        onChange={e => setFormData({ ...formData, config: { ...formData.config, height: e.target.value } })}
+                                                        placeholder="e.g. 2.0"
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className={labelCls}>Length ({unitLabel})</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.config.length}
+                                                        onChange={e => setFormData({ ...formData, config: { ...formData.config, length: e.target.value } })}
+                                                        placeholder="e.g. 3.0"
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Breadth ({unitLabel})</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.config.breadth}
+                                                        onChange={e => setFormData({ ...formData, config: { ...formData.config, breadth: e.target.value } })}
+                                                        placeholder="e.g. 2.0"
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className={labelCls}>Height ({unitLabel})</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={formData.config.height}
+                                                        onChange={e => setFormData({ ...formData, config: { ...formData.config, height: e.target.value } })}
+                                                        placeholder="e.g. 2.5"
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {formData.analytics_type === 'EvaraDeep' && (

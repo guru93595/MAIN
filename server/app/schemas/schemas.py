@@ -112,16 +112,6 @@ class NodeCreate(NodeBase):
     customer_id: Optional[str] = None
     community_id: Optional[str] = None
     distributor_id: Optional[str] = None
-    
-    # Missing fields from IIIT H
-    sampling_rate: Optional[int] = 60
-    threshold_low: Optional[float] = 20.0
-    threshold_high: Optional[float] = 90.0
-    sms_enabled: bool = False
-    dashboard_visible: bool = True
-    logic_inverted: bool = False
-    is_individual: bool = False
-    metrics_config: Optional[Dict[str, Any]] = None
 
     # Specialized Configs (Optional during creation)
     config_tank: Optional[Dict[str, Any]] = None
@@ -152,9 +142,12 @@ class ThingSpeakMappingBase(BaseModel):
         from_attributes = True
 
 class DeviceConfigTankBase(BaseModel):
-    capacity: Optional[int] = None
-    max_depth: Optional[float] = None
-    temp_enabled: Optional[bool] = None
+    tank_shape: Optional[str] = None  # 'cylinder' or 'rectangular'
+    dimension_unit: Optional[str] = "m"  # m, cm, feet, inches
+    radius: Optional[float] = None  # For cylinder
+    height: Optional[float] = None  # Both shapes
+    length: Optional[float] = None  # For rectangular
+    breadth: Optional[float] = None  # For rectangular
 
     class Config:
         from_attributes = True
@@ -269,15 +262,6 @@ class SimpleNodeResponse(BaseModel):
     thingspeak_channel_id: Optional[str] = None
     thingspeak_read_api_key: Optional[str] = None
     created_by: Optional[str] = None
-    
-    # IIIT H specific
-    sampling_rate: Optional[int] = None
-    threshold_low: Optional[float] = None
-    threshold_high: Optional[float] = None
-    sms_enabled: Optional[bool] = None
-    dashboard_visible: Optional[bool] = None
-    logic_inverted: Optional[bool] = None
-    is_individual: Optional[bool] = None
     
     class Config:
         from_attributes = True
