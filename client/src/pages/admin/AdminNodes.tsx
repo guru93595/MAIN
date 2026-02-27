@@ -18,6 +18,7 @@ const AdminNodes = () => {
         capacity: '',
         thingspeak_channel_id: '',
         thingspeak_read_api_key: '',
+        thingspeak_write_api_key: '',  // Add write key field
     });
 
     const categories: NodeCategory[] = ['OHT', 'Sump', 'Borewell', 'GovtBorewell', 'PumpHouse', 'FlowMeter'];
@@ -33,13 +34,47 @@ const AdminNodes = () => {
         if (formData.category === 'PumpHouse' || formData.category === 'FlowMeter') analytics_type = 'EvaraFlow';
 
         try {
-            await createNode({
+            // Prepare ThingSpeak mappings in the format backend expects
+            const thingspeak_mappings = [];
+            if (formData.thingspeak_channel_id && formData.thingspeak_read_api_key) {
+                thingspeak_mappings.push({
+                    channel_id: formData.thingspeak_channel_id,
+                    read_api_key: formData.thingspeak_read_api_key,
+                    write_api_key: formData.thingspeak_write_api_key || null,
+                    field_mapping: {"field2": "distance"}  // Default field mapping for distance
+                });
+            }
+
+            // Add default tank configuration for EvaraTank devices
+            const config_tank = analytics_type === 'EvaraTank' ? {
+                tank_shape: "rectangular",
+                dimension_unit: "m",
+                radius: null,
+                height: 2.5,
+                length: 5.0,
+                breadth: 6.5
+            } : undefined;
+
+            const nodeData = {
                 ...formData,
                 lat: parseFloat(formData.lat) || 0,
                 lng: parseFloat(formData.lng) || 0,
                 analytics_type,
-                status: 'Online'
-            });
+                status: 'Online',
+                thingspeak_mappings,  // Send as list of mappings
+                config_tank  // Add tank configuration
+            };
+
+            console.log("🚀 Creating node with data:", nodeData);
+
+            // Validation for EvaraTank devices
+            if (analytics_type === 'EvaraTank' && (!formData.thingspeak_channel_id || !formData.thingspeak_read_api_key)) {
+                setErrorMsg("EvaraTank devices require ThingSpeak Channel ID and Read API Key for water level monitoring.");
+                setLoading(false);
+                return;
+            }
+
+            await createNode(nodeData as any);  // Type assertion to bypass TypeScript check
             setStatus('success');
             setFormData({
                 label: '',
@@ -51,6 +86,7 @@ const AdminNodes = () => {
                 capacity: '',
                 thingspeak_channel_id: '',
                 thingspeak_read_api_key: '',
+                thingspeak_write_api_key: ''
             });
         } catch (err: any) {
             setStatus('error');
@@ -214,6 +250,16 @@ const AdminNodes = () => {
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-mono text-sm"
                                             value={formData.thingspeak_read_api_key}
                                             onChange={e => setFormData({ ...formData, thingspeak_read_api_key: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Write API Key</label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. XZORK5..."
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-mono text-sm"
+                                            value={formData.thingspeak_write_api_key}
+                                            onChange={e => setFormData({ ...formData, thingspeak_write_api_key: e.target.value })}
                                         />
                                     </div>
                                 </div>

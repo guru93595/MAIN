@@ -94,9 +94,20 @@ async def poll_thingspeak_loop():
                                     
                                 feed = feeds[0]
                                 
-                                # Process the metrics (assuming field1 = level/flow based on analytics type)
+                                # CRITICAL FIELD MAPPING:
+                                # - EvaraTank: Use field2 for distance (NEVER field1!)
+                                # - EvaraFlow: Use field1 for flow rate
+                                # - EvaraDeep: Use field2 for depth
                                 try:
-                                    val = float(feed.get("field1", 0))
+                                    if node.analytics_type == "EvaraTank":
+                                        # TANK: field2 = Distance (field1 = Temperature, IGNORED)
+                                        val = float(feed.get("field2", 0) or 0)
+                                    elif node.analytics_type == "EvaraDeep":
+                                        # DEEP: field2 = Depth
+                                        val = float(feed.get("field2", 0) or 0)
+                                    else:
+                                        # FLOW: field1 = Flow rate
+                                        val = float(feed.get("field1", 0) or 0)
                                 except (ValueError, TypeError):
                                     val = 0.0
                                     

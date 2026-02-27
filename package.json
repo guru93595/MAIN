@@ -12,5 +12,8 @@
     },
     "devDependencies": {
         "concurrently": "^8.2.2"
+    },
+    "dependencies": {
+        "supabase": "^2.76.15"
     }
 }

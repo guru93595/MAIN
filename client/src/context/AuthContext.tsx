@@ -184,10 +184,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const result = await loginFn(email, password);
                 console.log('✅ Login success:', result);
                 
-                // Redirect to SuperAdmin dashboard for superadmin users
-                if (result.role === 'superadmin') {
-                    window.location.href = '/superadmin/dashboard';
-                }
+                // Don't redirect here - let the login page handle redirection
+                // This prevents double redirects and conflicts
                 
                 return { success: true };
             } catch (error: any) {

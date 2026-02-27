@@ -47,8 +47,20 @@ class NodeAnalyticsService:
         if len(readings) < 10:
             return -1 # Not enough data
             
+        # Convert timestamps to numeric values
+        def parse_timestamp(ts):
+            if isinstance(ts, str):
+                try:
+                    # Parse ISO format timestamp
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    return dt.timestamp()
+                except:
+                    return datetime.utcnow().timestamp()
+            return float(ts) if ts else datetime.utcnow().timestamp()
+        
         df = pd.DataFrame([
-            {"timestamp": r.get('timestamp', datetime.utcnow().timestamp()), "value": r.get('level', 0)} 
+            {"timestamp": parse_timestamp(r.get('timestamp')), "value": r.get('level', 0)} 
             for r in readings
         ])
         

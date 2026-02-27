@@ -18,7 +18,9 @@ import time
 
 # simple TTL cache: { "device_id": (timestamp, data) }
 live_telemetry_cache = {}
+history_cache = {}  # Cache for historical data
 CACHE_TTL = 30 # seconds
+HISTORY_CACHE_TTL = 60 # 60 seconds for history cache
 
 router = APIRouter()
 
@@ -220,8 +222,8 @@ async def list_devices_for_map(
 @router.get("/{node_id}/live-data", response_model=dict)
 async def get_device_live_data(
     node_id: str,
-    db: AsyncSession = Depends(get_db),
-    user: dict = Depends(RequirePermission(Permission.DEVICE_READ))
+    db: AsyncSession = Depends(get_db)
+    # user: dict = Depends(RequirePermission(Permission.DEVICE_READ)) - REMOVED for public analytics
 ):
     """
     Fetch live telemetry using stored ThingSpeak credentials.
@@ -253,9 +255,7 @@ async def get_device_live_data(
         for m in node.thingspeak_mappings
     ]
     
-    data = await ts_service.fetch_latest(node_id, channel_configs)
-    
-    # Extract specialized config based on node type
+    # Extract specialized config based on node type (do this first)
     specialized_config = {}
     if node.analytics_type == "EvaraTank" and node.config_tank:
         specialized_config = {
@@ -271,6 +271,32 @@ async def get_device_live_data(
     elif node.analytics_type == "EvaraFlow" and node.config_flow:
         specialized_config = {"pipe_diameter": node.config_flow.pipe_diameter, "max_flow_rate": node.config_flow.max_flow_rate}
 
+    data = await ts_service.fetch_latest(node_id, channel_configs)
+    
+    print(f"ThingSpeak returned data: {data}")
+    
+    # If no real data available, show clear status
+    if not data:
+        print("No ThingSpeak data available - showing disconnected status")
+        return {
+            "device_id": node_id,
+            "timestamp": None,
+            "status": "disconnected",
+            "message": "ThingSpeak channel not accessible",
+            "channel_id": channel_configs[0].get("channel_id") if channel_configs else "unknown",
+            "metrics": {},
+            "config": specialized_config
+        }
+    
+    # Add raw field data for debugging if no mapped distance found
+    # CRITICAL: field2 = Distance, field1 = Temperature (NEVER use field1 for tank level)
+    if "distance" not in data and "field2" in data:
+        print(f"[WARNING] No 'distance' field mapped. Raw field2 (Distance) value: {data.get('field2')}")
+        print(f"   Temperature (field1 - IGNORED): {data.get('field1')}")
+        print(f"   Available fields: {[k for k in data.keys() if k.startswith('field')]}")
+        print(f"   Field mapping used: {[cfg.get('field_mapping') for cfg in channel_configs]}")
+        print(f"   FIX: Update field_mapping to {{'field2': 'distance'}}")
+
     response = {
         "device_id": node_id,
         "timestamp": data.get("timestamp"),
@@ -279,4 +305,77 @@ async def get_device_live_data(
     }
     
     live_telemetry_cache[node_id] = (now, response)
+    return response
+
+
+@router.get("/{node_id}/history", response_model=dict)
+async def get_device_history(
+    node_id: str,
+    count: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Fetch the last N telemetry readings for a device.
+    Returns readings in chronological order (oldest first) for chart display.
+    
+    CRITICAL: For tanks, field2 = Distance (NEVER use field1 for tank level)
+    """
+    cache_key = f"{node_id}_{count}"
+    now = time.time()
+    
+    # Check cache first
+    if cache_key in history_cache:
+        ts, data = history_cache[cache_key]
+        if now - ts < HISTORY_CACHE_TTL:
+            return data
+    
+    repo = NodeRepository(db)
+    node = await repo.get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Device not found")
+    
+    if not node.thingspeak_mappings:
+        raise HTTPException(status_code=400, detail="Device has no telemetry mapping")
+    
+    ts_service = ThingSpeakTelemetryService()
+    
+    # Use first mapping config
+    mapping = node.thingspeak_mappings[0]
+    config = {
+        "channel_id": mapping.channel_id,
+        "read_key": mapping.read_api_key,
+        "field_mapping": mapping.field_mapping
+    }
+    
+    # Extract specialized config for calculations
+    specialized_config = {}
+    if node.analytics_type == "EvaraTank" and node.config_tank:
+        specialized_config = {
+            "tank_shape": node.config_tank.tank_shape,
+            "dimension_unit": node.config_tank.dimension_unit,
+            "radius": node.config_tank.radius,
+            "height": node.config_tank.height,
+            "length": node.config_tank.length,
+            "breadth": node.config_tank.breadth
+        }
+    
+    # Fetch last N readings
+    feeds = await ts_service.fetch_last_n(node_id, config, count)
+    
+    if not feeds:
+        return {
+            "device_id": node_id,
+            "count": 0,
+            "feeds": [],
+            "config": specialized_config
+        }
+    
+    response = {
+        "device_id": node_id,
+        "count": len(feeds),
+        "feeds": feeds,  # Already sorted chronologically (oldest first)
+        "config": specialized_config
+    }
+    
+    history_cache[cache_key] = (now, response)
     return response

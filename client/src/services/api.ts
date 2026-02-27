@@ -4,69 +4,76 @@ import { supabase } from '../lib/supabase';
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 console.log('Backend API Base URL:', baseURL);
 
-// Create Axios Instance
+// Create Axios Instance with timeout
 const api = axios.create({
     baseURL,
     headers: {
         'Content-Type': 'application/json',
     },
+    timeout: 15000, // 15 second timeout for all requests
 });
 
-// Request Interceptor: Get token directly from Supabase client
+// Helper: Get session with timeout to prevent hanging
+const getSessionWithTimeout = async (timeoutMs: number = 2000): Promise<string | null> => {
+    return new Promise((resolve) => {
+        // Set timeout to resolve with null (no token)
+        const timeoutId = setTimeout(() => {
+            console.warn('⏱️ Session fetch timed out after', timeoutMs, 'ms - continuing without auth');
+            resolve(null);
+        }, timeoutMs);
+        
+        // Try to get session
+        supabase.auth.getSession()
+            .then((result) => {
+                clearTimeout(timeoutId);
+                if (result.data?.session?.access_token) {
+                    resolve(result.data.session.access_token);
+                } else {
+                    resolve(null);
+                }
+            })
+            .catch((err) => {
+                clearTimeout(timeoutId);
+                console.warn('⚠️ Session fetch failed:', err);
+                resolve(null);
+            });
+    });
+};
+
+// Request Interceptor: Get token with timeout protection
 api.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
         let token: string | null = null;
 
         try {
-            // Get current session directly from Supabase client
-            const { data: { session }, error } = await supabase.auth.getSession();
+            // Get session with 2 second timeout to prevent infinite hang
+            token = await getSessionWithTimeout(2000);
             
-            if (error) {
-                console.error('❌ Error getting session:', error);
-            } else if (session?.access_token) {
-                token = session.access_token;
-                console.log('✅ Got token from Supabase client for:', config.method?.toUpperCase(), config.url);
+            if (token) {
+                console.log('✅ Got token from Supabase for:', config.method?.toUpperCase(), config.url);
             } else {
-                console.log('❌ No session found in Supabase client');
+                console.log('ℹ️ No Supabase session (using dev mode):', config.method?.toUpperCase(), config.url);
             }
         } catch (e) {
-            console.error('❌ Exception getting session:', e);
-        }
-
-        // Clean up old dev-bypass tokens
-        try {
-            const stored = localStorage.getItem('evara_session');
-            if (stored) {
-                const { user } = JSON.parse(stored);
-                if (user?.id && typeof user.id === 'string' && user.id.startsWith('dev-bypass-')) {
-                    console.log('Removing old dev-bypass token');
-                    localStorage.removeItem('evara_session');
-                }
-            }
-        } catch {
-            // ignore
+            console.warn('⚠️ Session check failed, continuing without token:', e);
         }
 
         if (token) {
             config.headers.set('Authorization', `Bearer ${token}`);
-            console.log('🚀 API request with token:', config.method?.toUpperCase(), config.url);
-        } else {
-            console.log('❌ No valid token found for API request:', config.method?.toUpperCase(), config.url);
         }
+        
         return config;
     },
     (error: AxiosError) => Promise.reject(error)
 );
 
-// Response Interceptor: Handle 401 Unauthorized
+// Response Interceptor: Handle errors gracefully without forced redirect
 api.interceptors.response.use(
     (response: AxiosResponse) => response,
     (error: AxiosError) => {
         if (error.response && error.response.status === 401) {
-            console.log('401 Unauthorized - redirecting to login');
-            // Clear any stored auth data and redirect to login
-            localStorage.removeItem('evara_session');
-            window.location.href = '/login';
+            console.warn('401 Unauthorized API call. Continuing without forced redirect.');
+            // Do not force logout or redirect to allow unauthenticated public views
         }
         return Promise.reject(error);
     }

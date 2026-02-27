@@ -69,10 +69,17 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         const fetchConfig = async () => {
             try {
                 const node = await getDeviceDetails(nodeId);
-                setTsConfig({
-                    channelId: node.thingspeak_channel_id ?? null,
-                    readApiKey: node.thingspeak_read_api_key ?? null,
-                });
+
+                // Strategy: Root record fallback to first mapping
+                let channelId = node.thingspeak_channel_id ?? null;
+                let readApiKey = node.thingspeak_read_api_key ?? null;
+
+                if (!channelId && (node.thingspeak_mappings?.length ?? 0) > 0) {
+                    channelId = node.thingspeak_mappings![0].channel_id;
+                    readApiKey = node.thingspeak_mappings![0].read_api_key;
+                }
+
+                setTsConfig({ channelId, readApiKey });
             } catch (err) {
                 console.error("Failed to fetch node config:", err);
                 setTsConfig({ channelId: null, readApiKey: null });
@@ -82,16 +89,12 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         fetchConfig();
     }, [nodeId]);
 
-    // Animation State
-    const [flowFillHeight, setFlowFillHeight] = useState(0);
-
-    useEffect(() => {
-        // Trigger animation after mount
-        const timer = setTimeout(() => {
-            setFlowFillHeight(60); // Target height from CSS/Mock
-        }, 100);
-        return () => clearTimeout(timer);
-    }, []);
+    // Flow percentage based on real data (0 if no data)
+    // NOTE: EvaraFlow (pump houses) uses field1 for flow rate
+    // This is DIFFERENT from EvaraTank which uses field2 for distance
+    const flowPercentage = feeds.length > 0 
+        ? Math.min(100, Math.max(0, parseFloat(feeds[feeds.length - 1].field1 || '0')))
+        : 0;
 
     // Process real ThingSpeak data
     const processFlowData = () => {
@@ -105,9 +108,10 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
             usageBreakdown: [0, 0]
         };
 
-        // Extract flow values from field1 (assuming field1 is flow rate)
+        // EvaraFlow: Extract flow values from field1 (flow rate for pump houses)
+        // NOTE: EvaraTank uses field2 for distance - these are separate analytics types
         const flowValues = feeds.map(feed => parseFloat(feed.field1 || '0')).filter(val => !isNaN(val));
-        
+
         if (flowValues.length === 0) return {
             trendData: [0, 0, 0, 0, 0, 0],
             liveData: [0, 0, 0, 0, 0, 0],
@@ -121,19 +125,19 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
         // Get recent data for charts
         const recentValues = flowValues.slice(-6);
         const liveValues = flowValues.slice(-6);
-        
+
         // Calculate metrics
         const instantFlow = flowValues[flowValues.length - 1] || 0;
         const cumulativeUsage = flowValues.reduce((sum, val) => sum + val, 0);
         const peakFlow = Math.max(...flowValues);
         const avgFlow = flowValues.reduce((sum, val) => sum + val, 0) / flowValues.length;
         const efficiency = avgFlow > 0 ? Math.min(100, (avgFlow / peakFlow) * 100) : 0;
-        
+
         // Calculate usage breakdown (peak vs standard)
         const threshold = peakFlow * 0.8;
         const peakCount = flowValues.filter(val => val > threshold).length;
         const standardCount = flowValues.length - peakCount;
-        
+
         return {
             trendData: recentValues,
             liveData: liveValues,
@@ -261,7 +265,7 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
                 <div className="ef-dashboard-grid">
                     <div className="ef-card" style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <div className="ef-flow-visual">
-                            <div className="ef-flow-fill" style={{ height: `${flowFillHeight}%` }}></div>
+                            <div className="ef-flow-fill" style={{ height: `${flowPercentage}%` }}></div>
                         </div>
                         <div>
                             <div className="ef-kpi-label">Instant Flow</div>
@@ -311,16 +315,16 @@ const EvaraFlow = ({ embedded = false, nodeId }: EvaraFlowProps) => {
                         <div style={{ marginTop: '16px', fontSize: '13px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                                 <span>Peak Usage</span><span style={{ fontWeight: 700 }}>
-                                    {flowData.usageBreakdown[0] > 0 ? 
-                                        `${((flowData.usageBreakdown[0] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` : 
+                                    {flowData.usageBreakdown[0] > 0 ?
+                                        `${((flowData.usageBreakdown[0] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` :
                                         '0%'
                                     }
                                 </span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span>Standard Usage</span><span style={{ fontWeight: 700 }}>
-                                    {flowData.usageBreakdown[1] > 0 ? 
-                                        `${((flowData.usageBreakdown[1] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` : 
+                                    {flowData.usageBreakdown[1] > 0 ?
+                                        `${((flowData.usageBreakdown[1] / (flowData.usageBreakdown[0] + flowData.usageBreakdown[1])) * 100).toFixed(0)}%` :
                                         '0%'
                                     }
                                 </span>

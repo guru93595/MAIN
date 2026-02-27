@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import { Home, Dashboard, AllNodes, Admin, NodeDetails, EvaraTank, EvaraDeep, EvaraFlow, Login, Analytics } from './pages';
+import { Home, Dashboard, AllNodes, Admin, NodeDetails, EvaraDeep, EvaraFlow, Login, Analytics } from './pages';
+import EvaraTankWrapper from './components/EvaraTankWrapper';
 import AIAssistant from './pages/AIAssistant';
 import AdminLayout from './layouts/AdminLayout';
 // import SuperAdminOverview from './pages/SuperAdminOverview';
@@ -89,21 +90,24 @@ function App() {
                     <ToastProvider>
                         <Router>
                             <Routes>
-                                <Route path="/" element={<Navigate to="/login" replace />} />
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
                                 <Route path="/login" element={<Login />} />
+
+                                <Route element={<MainLayout />}>
+                                    <Route path="/dashboard" element={<Dashboard />} />
+                                    <Route path="/nodes" element={<AllNodes />} />
+                                    <Route path="/node/:id" element={<NodeDetails />} />
+                                    <Route path="/evaratank" element={<EvaraTankWrapper />} />
+                                    <Route path="/evaradeep" element={<EvaraDeep />} />
+                                    <Route path="/evaraflow" element={<EvaraFlow />} />
+                                    <Route path="/analytics" element={<Analytics />} />
+                                </Route>
 
                                 <Route element={<ProtectedRoute />}>
                                     <Route element={<MainLayout />}>
                                         <Route path="/home" element={<Home />} />
-                                        <Route path="/dashboard" element={<Dashboard />} />
-                                        <Route path="/nodes" element={<AllNodes />} />
-                                        <Route path="/node/:id" element={<NodeDetails />} />
-                                        <Route path="/evaratank" element={<EvaraTank />} />
-                                        <Route path="/evaradeep" element={<EvaraDeep />} />
-                                        <Route path="/evaraflow" element={<EvaraFlow />} />
                                         <Route path="/admin" element={<Admin />} />
                                         <Route path="/ai" element={<AIAssistant />} />
-                                        <Route path="/analytics" element={<Analytics />} />
                                     </Route>
 
                                     {/* Admin Routes (Super Admin & Distributor) */}

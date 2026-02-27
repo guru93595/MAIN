@@ -314,7 +314,7 @@ class NodeAnalyticsBase(BaseModel):
 class NodeAnalyticsCreate(NodeAnalyticsBase):
     pass
 
-class NodeAnalyticsResponse(NodeAnalyticsBase):
+class NodeAnalyticsDataResponse(NodeAnalyticsBase):
     id: str
     created_at: datetime
     

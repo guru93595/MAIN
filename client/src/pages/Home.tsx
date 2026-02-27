@@ -14,8 +14,6 @@ export const Home = () => {
     const [activeFilter, setActiveFilter] = useState<string | null>(null);
     const [activePipeline, setActivePipeline] = useState<string | null>(null);
 
-    // Demo mode flag
-    const isDemoMode = import.meta.env.DEV && true;
 
     const { nodes, loading: nodesLoading } = useNodes();
     const { pipelines, loading: pipelinesLoading } = usePipelines();
@@ -53,24 +51,6 @@ export const Home = () => {
 
     return (
         <div className="relative w-full h-[calc(100vh-64px)] flex flex-col">
-            {/* Demo Mode Banner */}
-            {isDemoMode && (
-                <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2 z-[500]">
-                    <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <span className="text-yellow-600 font-bold text-sm">🔓 Demo Mode</span>
-                            <span className="text-yellow-700 text-xs">Map shows sample data</span>
-                        </div>
-                        <button
-                            onClick={() => window.location.href = '/login'}
-                            className="text-xs text-yellow-600 hover:text-yellow-700 font-semibold underline"
-                        >
-                            Login for Real Data
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {/* Map Container */}
             <div className="flex-1 relative z-0">
                 <MapContainer

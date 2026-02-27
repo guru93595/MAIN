@@ -104,7 +104,7 @@ class NodeRepository(BaseRepository[Node]):
                 selectinload(self.model.config_flow),
                 selectinload(self.model.thingspeak_mappings)
             )
-            .filter(self.model.hardware_id == key)  # hardware_id is the actual node_key
+            .filter(self.model.node_key == key)  # hardware_id is the actual node_key
         )
         node = result.scalars().first()
         if node and node.thingspeak_mappings:

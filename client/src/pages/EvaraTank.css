@@ -11,6 +11,12 @@
     --danger: #EF4444;
 }
 
+/* Skeleton Loading Animation */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 .evara-tank-body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     background-color: var(--bg);

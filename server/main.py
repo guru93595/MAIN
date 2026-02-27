@@ -88,7 +88,7 @@ async def startup_event():
     # Initialize database tables
     await create_tables()
     # Auto-seed if database is new/empty
-    await seed_db()
+    # await seed_db()
     await start_background_tasks()
     logger.info("Background tasks started.")
     logger.info("Application startup complete.")

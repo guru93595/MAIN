@@ -37,35 +37,45 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
     const [error, setError] = useState('');
 
     // Form State
-    const [formData, setFormData] = useState({
-        hardware_id: initialData?.hardware_id || initialData?.node_key || '',
-        device_label: initialData?.device_label || initialData?.label || '',
-        device_type: initialData?.device_type || initialData?.category || 'tank',
-        analytics_type: initialData?.analytics_type || 'EvaraTank',
-        community_id: initialData?.community_id || '',
-        customer_id: initialData?.customer_id || '',
-        lat: initialData?.lat?.toString() || '',
-        long: (initialData?.lng || initialData?.long || '').toString(),
-        thingspeak: {
-            channel_id: initialData?.thingspeak_mapping?.channel_id || '',
-            read_api_key: initialData?.thingspeak_mapping?.read_api_key || '',
-        },
-        config: {
-            // EvaraTank - Tank Shape Details
-            tank_shape: initialData?.config_tank?.tank_shape || 'cylinder',
-            dimension_unit: initialData?.config_tank?.dimension_unit || 'm',
-            radius: initialData?.config_tank?.radius?.toString() || '',
-            height: initialData?.config_tank?.height?.toString() || '',
-            length: initialData?.config_tank?.length?.toString() || '',
-            breadth: initialData?.config_tank?.breadth?.toString() || '',
-            // EvaraDeep
-            static_depth: initialData?.config_deep?.static_depth?.toString() || '',
-            dynamic_depth: initialData?.config_deep?.dynamic_depth?.toString() || '',
-            recharge_threshold: initialData?.config_deep?.recharge_threshold?.toString() || '',
-            // EvaraFlow
-            pipe_diameter: initialData?.config_flow?.pipe_diameter?.toString() || '',
-            max_flow_rate: initialData?.config_flow?.max_flow_rate?.toString() || ''
-        }
+    const [formData, setFormData] = useState(() => {
+        // Extract ThingSpeak data from either flat fields or nested mappings
+        const tsMapping = initialData?.thingspeak_mappings?.[0];
+        const channelId = tsMapping?.channel_id || initialData?.thingspeak?.channel_id || initialData?.thingspeak_channel_id || '';
+        const readApiKey = tsMapping?.read_api_key || initialData?.thingspeak?.read_api_key || initialData?.thingspeak_read_api_key || '';
+
+        // Extract tank config from nested config_tank object
+        const tc = initialData?.config_tank;
+
+        return {
+            hardware_id: initialData?.hardware_id || initialData?.node_key || '',
+            device_label: initialData?.device_label || initialData?.label || '',
+            device_type: initialData?.device_type || initialData?.category || 'tank',
+            analytics_type: initialData?.analytics_type || 'EvaraTank',
+            community_id: initialData?.community_id || '',
+            customer_id: initialData?.customer_id || '',
+            lat: initialData?.lat?.toString() || '',
+            long: (initialData?.lng || initialData?.long || '').toString(),
+            thingspeak: {
+                channel_id: channelId,
+                read_api_key: readApiKey,
+            },
+            config: {
+                // EvaraTank - Tank Shape Details
+                tank_shape: tc?.tank_shape || initialData?.config?.tank_shape || 'cylinder',
+                dimension_unit: tc?.dimension_unit || initialData?.config?.dimension_unit || 'm',
+                radius: (tc?.radius || initialData?.config?.radius || '').toString(),
+                height: (tc?.height || initialData?.config?.height || '').toString(),
+                length: (tc?.length || initialData?.config?.length || '').toString(),
+                breadth: (tc?.breadth || initialData?.config?.breadth || '').toString(),
+                // EvaraDeep
+                static_depth: initialData?.config_deep?.static_depth?.toString() || initialData?.config?.static_depth?.toString() || '',
+                dynamic_depth: initialData?.config_deep?.dynamic_depth?.toString() || initialData?.config?.dynamic_depth?.toString() || '',
+                recharge_threshold: initialData?.config_deep?.recharge_threshold?.toString() || initialData?.config?.recharge_threshold?.toString() || '',
+                // EvaraFlow
+                pipe_diameter: initialData?.config_flow?.pipe_diameter?.toString() || initialData?.config?.pipe_diameter?.toString() || '',
+                max_flow_rate: initialData?.config_flow?.max_flow_rate?.toString() || initialData?.config?.max_flow_rate?.toString() || ''
+            }
+        };
     });
 
     const filteredCustomers = customers.filter(c => !formData.community_id || c.community_id === formData.community_id);
@@ -97,16 +107,18 @@ export const AddDeviceForm = ({ onSubmit, onCancel, communities, customers, init
         setError('');
 
         try {
-            // Prepare payload with all required fields
+            // Prepare payload with correct backend field names
             const payload: any = {
-                hardware_id: formData.hardware_id,
-                device_label: formData.device_label,
-                device_type: formData.device_type,
+                node_key: formData.hardware_id,
+                label: formData.device_label,
+                category: formData.device_type === 'tank' ? 'OHT' : 
+                         formData.device_type === 'deep' ? 'Borewell' :
+                         formData.device_type === 'flow' ? 'PumpHouse' : 'OHT',
                 analytics_type: formData.analytics_type,
                 community_id: formData.community_id || null,
                 customer_id: formData.customer_id || null,
                 lat: formData.lat ? parseFloat(formData.lat) : null,
-                long: formData.long ? parseFloat(formData.long) : null,
+                lng: formData.long ? parseFloat(formData.long) : null,
                 thingspeak_mappings: formData.thingspeak.channel_id ? [{
                     channel_id: formData.thingspeak.channel_id,
                     read_api_key: formData.thingspeak.read_api_key,

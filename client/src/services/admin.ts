@@ -1,5 +1,53 @@
 import api from './api';
 
+// TypeScript interfaces for device operations
+export interface ThingSpeakMapping {
+    channel_id: string;
+    read_api_key?: string;
+    write_api_key?: string;
+    field_mapping?: Record<string, string>;
+}
+
+export interface TankConfig {
+    tank_shape?: 'cylinder' | 'rectangular';
+    dimension_unit?: 'm' | 'cm' | 'feet' | 'inches';
+    radius?: number | null;
+    height?: number | null;
+    length?: number | null;
+    breadth?: number | null;
+}
+
+export interface DeepConfig {
+    static_depth?: number;
+    dynamic_depth?: number;
+    recharge_threshold?: number;
+}
+
+export interface FlowConfig {
+    pipe_diameter?: number;
+    max_flow_rate?: number;
+    abnormal_threshold?: number;
+}
+
+export interface CreateDevicePayload {
+    node_key: string;
+    label: string;
+    category: 'OHT' | 'Sump' | 'Borewell' | 'GovtBorewell' | 'PumpHouse' | 'FlowMeter';
+    analytics_type: 'EvaraTank' | 'EvaraDeep' | 'EvaraFlow';
+    community_id?: string | null;
+    customer_id?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    thingspeak_mappings?: ThingSpeakMapping[] | null;
+    config_tank?: TankConfig;
+    config_deep?: DeepConfig;
+    config_flow?: FlowConfig;
+}
+
+export interface UpdateDevicePayload extends CreateDevicePayload {
+    id?: string;
+}
+
 export const adminService = {
     async getCommunities() {
         const response = await api.get('/communities');
@@ -34,22 +82,12 @@ export const adminService = {
         return response.data;
     },
 
-    async createDevice(data: {
-        hardware_id: string;
-        device_label: string;
-        device_type: string;
-        analytics_type: string;
-        community_id?: string;
-        customer_id?: string;
-        lat?: number;
-        long?: number;
-        thingspeak_mappings?: any[];
-    }) {
+    async createDevice(data: CreateDevicePayload) {
         const response = await api.post('/nodes', data);
         return response.data;
     },
 
-    async updateDevice(id: string, data: any) {
+    async updateDevice(id: string, data: CreateDevicePayload) {
         const response = await api.put(`/nodes/${id}`, data);
         return response.data;
     },

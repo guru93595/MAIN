@@ -6,6 +6,7 @@ import {
     Activity, AlertTriangle, Trash2, Edit2
 } from 'lucide-react';
 import { useNodes } from '../../hooks/useNodes';
+import api from '../../services/api';
 import { useToast } from '../../components/ToastProvider';
 import { ActionCard } from '../../components/admin/ActionCard';
 import { Modal } from '../../components/ui/Modal';
@@ -329,7 +330,17 @@ const AdminDashboard = () => {
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2">
                                             <button
-                                                onClick={() => { setEditingNode(node); setActiveModal('device'); }}
+                                                onClick={async () => {
+                                                    try {
+                                                        const response = await api.get(`/nodes/${node.id}`);
+                                                        setEditingNode(response.data);
+                                                        setActiveModal('device');
+                                                    } catch (err) {
+                                                        console.error('Failed to fetch node details:', err);
+                                                        setEditingNode(node);
+                                                        setActiveModal('device');
+                                                    }
+                                                }}
                                                 className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                                 title="Edit Node"
                                             >

@@ -12,6 +12,7 @@ export interface DeviceDetails extends NodeRow {
     calibration_factor?: number;
     last_maintenance_date?: string;
     shadow_state?: DeviceShadow;
+    thingspeak_mappings?: any[];
 }
 
 export interface LiveTelemetry {

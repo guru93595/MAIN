@@ -6,6 +6,7 @@ import type { NodeRow } from '../types/database';
 let _cachedNodes: NodeRow[] | null = null;
 let _cacheTimestamp = 0;
 const CACHE_TTL_MS = 30_000;
+const FETCH_TIMEOUT_MS = 10_000; // 10 second timeout for fetch
 
 export const useNodes = () => {
     const [nodes, setNodes] = useState<NodeRow[]>(_cachedNodes ?? []);
@@ -15,9 +16,19 @@ export const useNodes = () => {
 
     const fetchNodes = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        
         try {
-            const response = await api.get<NodeRow[]>('/nodes/?limit=100');
-            console.log('🔍 Nodes API Response:', response.data);
+            console.log('🔍 Fetching nodes from API...');
+            const response = await api.get<NodeRow[]>('/nodes/?limit=100', {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            console.log('✅ Nodes API Response:', response.data?.length, 'nodes');
             _cachedNodes = response.data;
             _cacheTimestamp = Date.now();
             if (isMounted.current) {
@@ -25,11 +36,22 @@ export const useNodes = () => {
                 setError(null);
             }
         } catch (err: any) {
+            clearTimeout(timeoutId);
+            
+            // Handle abort/timeout
+            if (err.name === 'AbortError' || err.code === 'ECONNABORTED') {
+                console.error('⏱️ Nodes fetch timed out after', FETCH_TIMEOUT_MS, 'ms');
+                if (isMounted.current) {
+                    setError('Request timed out. Please check your connection.');
+                    setLoading(false);
+                }
+                return;
+            }
+            
             const status = err.response?.status;
             const detail = err.response?.data?.detail;
-            console.error('❌ Error fetching nodes:', err);
+            console.error('❌ Error fetching nodes:', err.message || err);
             console.error('Response status:', status);
-            console.error('Response detail:', detail);
 
             if (isMounted.current) {
                 if (status === 401) {
@@ -38,7 +60,7 @@ export const useNodes = () => {
                         : "Please log in again to view nodes.";
                     setError(msg);
                 } else {
-                    setError(typeof detail === "string" ? detail : "Failed to fetch nodes");
+                    setError(typeof detail === "string" ? detail : err.message || "Failed to fetch nodes");
                 }
             }
         } finally {

@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.all_models import NodeAnalytics
-from app.schemas.schemas import NodeAnalyticsResponse
 from app.core.security_supabase import get_current_user_token
 from sqlalchemy import select, and_
 from datetime import datetime, timedelta

@@ -34,10 +34,17 @@ const EvaraDeep = ({ embedded = false, nodeId }: EvaraDeepProps) => {
         const fetchConfig = async () => {
             try {
                 const node = await getDeviceDetails(nodeId);
-                setTsConfig({
-                    channelId: node.thingspeak_channel_id ?? null,
-                    readApiKey: node.thingspeak_read_api_key ?? null,
-                });
+
+                // Strategy: Root record fallback to first mapping
+                let channelId = node.thingspeak_channel_id ?? null;
+                let readApiKey = node.thingspeak_read_api_key ?? null;
+
+                if (!channelId && (node.thingspeak_mappings?.length ?? 0) > 0) {
+                    channelId = node.thingspeak_mappings![0].channel_id;
+                    readApiKey = node.thingspeak_mappings![0].read_api_key;
+                }
+
+                setTsConfig({ channelId, readApiKey });
             } catch (err) {
                 console.error("Failed to fetch node config:", err);
                 setTsConfig({ channelId: null, readApiKey: null });

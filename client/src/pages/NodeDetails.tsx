@@ -1,12 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, MapPin, Cpu } from 'lucide-react';
+import { ArrowLeft, MapPin, Cpu, Edit3, Save, X, Loader2 } from 'lucide-react';
 import EvaraTank from './EvaraTank';
 import EvaraDeep from './EvaraDeep';
 import EvaraFlow from './EvaraFlow';
-import type { NodeRow, NodeCategory, AnalyticsType } from '../types/database';
+import type { NodeCategory, AnalyticsType } from '../types/database';
 import clsx from 'clsx';
 import { MotorControl } from '../components/MotorControl';
+import api from '../services/api';
+import { adminService } from '../services/admin';
 
 // ─── Category label helpers ───────────────────────────────────────────────────
 
@@ -36,40 +38,106 @@ const ANALYTICS_LABEL: Record<AnalyticsType, { label: string; badge: string }> =
 
 // ─── NodeDetails (smart router) ───────────────────────────────────────────────
 
-import api from '../services/api';
-
 const NodeDetails = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    // Demo mode - bypass authentication for development
-    const isDemoMode = import.meta.env.DEV && false; // Set to false to require real data
-
-    const [node, setNode] = useState<NodeRow | null>(null);
+    const [node, setNode] = useState<any | null>(null);
     const [nodeLoading, setNodeLoading] = useState(true);
     const [nodeError, setNodeError] = useState<string | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [editData, setEditData] = useState<any>({});
+
+    const fetchNodeDetails = async () => {
+        if (!id) return;
+        setNodeLoading(true);
+        try {
+            const response = await api.get(`/nodes/${id}`);
+            setNode(response.data);
+            setNodeError(null);
+        } catch (err: any) {
+            setNodeError(err.response?.data?.detail || "Failed to load node");
+        } finally {
+            setNodeLoading(false);
+        }
+    };
 
     useEffect(() => {
-        if (!id) return;
-
-        const fetchNodeDetails = async () => {
-            setNodeLoading(true);
-            try {
-                console.log("🔍 Fetching node details for ID:", id);
-                const response = await api.get<NodeRow>(`/nodes/${id}`);
-                console.log("� Node response received:", response.data);
-                setNode(response.data);
-                setNodeError(null);
-            } catch (err: any) {
-                console.error("❌ Error fetching node details:", err);
-                setNodeError(err.response?.data?.detail || "Failed to load node");
-            } finally {
-                setNodeLoading(false);
-            }
-        };
-
         fetchNodeDetails();
     }, [id]);
+
+    // Initialize edit data when entering edit mode
+    const startEditing = () => {
+        const tsMapping = node?.thingspeak_mappings?.[0];
+        const tc = node?.config_tank;
+        setEditData({
+            thingspeak_channel_id: tsMapping?.channel_id || node?.thingspeak_channel_id || '',
+            thingspeak_read_api_key: tsMapping?.read_api_key || node?.thingspeak_read_api_key || '',
+            tank_shape: tc?.tank_shape || 'cylinder',
+            dimension_unit: tc?.dimension_unit || 'm',
+            radius: tc?.radius?.toString() || '',
+            height: tc?.height?.toString() || '',
+            length: tc?.length?.toString() || '',
+            breadth: tc?.breadth?.toString() || '',
+            lat: node?.lat?.toString() || '',
+            lng: (node?.lng || node?.long)?.toString() || '',
+        });
+        setIsEditing(true);
+    };
+
+    const cancelEditing = () => {
+        setIsEditing(false);
+        setEditData({});
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            // Build update payload
+            const payload: any = {
+                node_key: node.node_key,
+                label: node.label,
+                category: node.category,
+                analytics_type: node.analytics_type,
+                lat: editData.lat ? parseFloat(editData.lat) : null,
+                lng: editData.lng ? parseFloat(editData.lng) : null,
+            };
+
+            // ThingSpeak mappings
+            if (editData.thingspeak_channel_id) {
+                payload.thingspeak_mappings = [{
+                    channel_id: editData.thingspeak_channel_id,
+                    read_api_key: editData.thingspeak_read_api_key,
+                }];
+            }
+
+            // Tank config
+            if (node.analytics_type === 'EvaraTank') {
+                const tankConfig: any = {
+                    tank_shape: editData.tank_shape,
+                    dimension_unit: editData.dimension_unit,
+                    height: parseFloat(editData.height) || null,
+                };
+                if (editData.tank_shape === 'cylinder') {
+                    tankConfig.radius = parseFloat(editData.radius) || null;
+                } else {
+                    tankConfig.length = parseFloat(editData.length) || null;
+                    tankConfig.breadth = parseFloat(editData.breadth) || null;
+                }
+                payload.config_tank = tankConfig;
+            }
+
+            await adminService.updateDevice(node.id, payload);
+            await fetchNodeDetails(); // Refresh data
+            setIsEditing(false);
+        } catch (err: any) {
+            console.error('Save failed:', err);
+            alert(err.response?.data?.detail || 'Failed to save changes');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     // Unknown node — show graceful 404
     if (nodeLoading) {
@@ -107,26 +175,18 @@ const NodeDetails = () => {
     const analLabel = ANALYTICS_LABEL[node.analytics_type as AnalyticsType] || fallbackAnalLabel;
     const isOnline = node.status === 'Online';
 
+    // Derive display values from node
+    const tsMapping = node.thingspeak_mappings?.[0];
+    const channelId = tsMapping?.channel_id || node.thingspeak_channel_id || '—';
+    const readApiKey = tsMapping?.read_api_key || node.thingspeak_read_api_key || '—';
+    const tc = node.config_tank;
+
+    const inputCls = "w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all";
+    const metaLabel = "text-[10px] font-bold text-slate-400 uppercase tracking-wider";
+    const metaValue = "text-sm font-semibold text-slate-700 mt-0.5";
+
     return (
         <div className="flex flex-col min-h-full bg-slate-50">
-            {/* Demo Mode Banner */}
-            {isDemoMode && (
-                <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2">
-                    <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <span className="text-yellow-600 font-bold text-sm">🔓 Demo Mode</span>
-                            <span className="text-yellow-700 text-xs">Analytics are shown with sample data</span>
-                        </div>
-                        <button
-                            onClick={() => navigate('/login')}
-                            className="text-xs text-yellow-600 hover:text-yellow-700 font-semibold underline"
-                        >
-                            Login for Real Data
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {/* ── Context header bar ── */}
             <div className={clsx('bg-gradient-to-r border-b border-slate-200 shadow-sm', catStyles.accentBg)}>
                 <div className="max-w-screen-2xl mx-auto px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -148,16 +208,16 @@ const NodeDetails = () => {
                             </div>
                             <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
                                 <MapPin size={11} />
-                                <span className="font-medium">{node.location_name}</span>
+                                <span className="font-medium">{node.location_name || 'No location'}</span>
                                 <span className="text-slate-300">·</span>
-                                <span>{node.capacity}</span>
+                                <span>{node.capacity || node.analytics_type}</span>
                             </div>
                         </div>
 
                         {/* Badges */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className={clsx('text-[11px] font-bold px-2.5 py-1 rounded-lg', catStyles.badge)}>
-                                {CAT_LABEL[node.category as NodeCategory]}
+                                {CAT_LABEL[node.category as NodeCategory] || node.category}
                             </span>
                             <span className={clsx('text-[11px] font-bold px-2.5 py-1 rounded-lg', analLabel.badge)}>
                                 {analLabel.label}
@@ -191,23 +251,238 @@ const NodeDetails = () => {
                         />
                     )}
 
-                    {/* Additional Metadata / Node Info Card */}
+                    {/* ── DEVICE METADATA — Expanded with real data ── */}
                     <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Device Metadata</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400">Installation Date</p>
-                                <p className="text-sm font-bold text-slate-700">Oct 12, 2023</p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400">Firmware Version</p>
-                                <p className="text-sm font-bold text-slate-700 font-mono text-blue-600">v2.4.1-stable</p>
-                            </div>
-                            <div className="pt-2 border-t border-slate-50">
-                                <button className="w-full py-2 text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors">
-                                    Refresh Device Diagnostics
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Device Details</h3>
+                            {!isEditing ? (
+                                <button
+                                    onClick={startEditing}
+                                    className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors uppercase tracking-wider"
+                                >
+                                    <Edit3 size={11} /> Edit
                                 </button>
+                            ) : (
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        onClick={cancelEditing}
+                                        disabled={saving}
+                                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-slate-400 hover:bg-slate-50 rounded-lg transition-colors uppercase tracking-wider"
+                                    >
+                                        <X size={11} /> Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors uppercase tracking-wider disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                                        {saving ? 'Saving...' : 'Save'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-3.5">
+                            {/* Node Key */}
+                            <div>
+                                <p className={metaLabel}>Hardware ID</p>
+                                <p className={`${metaValue} font-mono`}>{node.node_key}</p>
                             </div>
+
+                            {/* Status */}
+                            <div>
+                                <p className={metaLabel}>Status</p>
+                                <p className={metaValue}>
+                                    <span className={clsx('inline-flex items-center gap-1.5', isOnline ? 'text-green-600' : 'text-red-500')}>
+                                        <span className={clsx('w-1.5 h-1.5 rounded-full', isOnline ? 'bg-green-500' : 'bg-red-400')} />
+                                        {node.status}
+                                    </span>
+                                </p>
+                            </div>
+
+                            {/* Created At */}
+                            <div>
+                                <p className={metaLabel}>Created At</p>
+                                <p className={metaValue}>{node.created_at ? new Date(node.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</p>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="border-t border-slate-100 pt-3">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">ThingSpeak</p>
+                            </div>
+
+                            {/* ThingSpeak */}
+                            {isEditing ? (
+                                <>
+                                    <div>
+                                        <p className={metaLabel}>Channel ID</p>
+                                        <input
+                                            value={editData.thingspeak_channel_id}
+                                            onChange={e => setEditData({ ...editData, thingspeak_channel_id: e.target.value })}
+                                            className={inputCls}
+                                            placeholder="e.g. 2489123"
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className={metaLabel}>Read API Key</p>
+                                        <input
+                                            value={editData.thingspeak_read_api_key}
+                                            onChange={e => setEditData({ ...editData, thingspeak_read_api_key: e.target.value })}
+                                            className={inputCls}
+                                            placeholder="e.g. ABCD1234EFGH5678"
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <p className={metaLabel}>Channel ID</p>
+                                        <p className={`${metaValue} font-mono text-blue-600`}>{channelId}</p>
+                                    </div>
+                                    <div>
+                                        <p className={metaLabel}>Read API Key</p>
+                                        <p className={`${metaValue} font-mono text-xs`} style={{ wordBreak: 'break-all' }}>{readApiKey !== '—' ? '••••••••' + readApiKey.slice(-4) : '—'}</p>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Tank Config — only for EvaraTank */}
+                            {node.analytics_type === 'EvaraTank' && (
+                                <>
+                                    <div className="border-t border-slate-100 pt-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Tank Specifications</p>
+                                    </div>
+
+                                    {isEditing ? (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <p className={metaLabel}>Shape</p>
+                                                    <select
+                                                        className={inputCls}
+                                                        value={editData.tank_shape}
+                                                        onChange={e => setEditData({ ...editData, tank_shape: e.target.value, radius: '', length: '', breadth: '' })}
+                                                    >
+                                                        <option value="cylinder">Cylinder</option>
+                                                        <option value="rectangular">Rectangular</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <p className={metaLabel}>Unit</p>
+                                                    <select
+                                                        className={inputCls}
+                                                        value={editData.dimension_unit}
+                                                        onChange={e => setEditData({ ...editData, dimension_unit: e.target.value })}
+                                                    >
+                                                        <option value="m">Meters</option>
+                                                        <option value="cm">cm</option>
+                                                        <option value="feet">Feet</option>
+                                                        <option value="inches">Inches</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            {editData.tank_shape === 'cylinder' ? (
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <p className={metaLabel}>Radius</p>
+                                                        <input type="number" step="0.01" value={editData.radius} onChange={e => setEditData({ ...editData, radius: e.target.value })} className={inputCls} placeholder="e.g. 1.5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Height</p>
+                                                        <input type="number" step="0.01" value={editData.height} onChange={e => setEditData({ ...editData, height: e.target.value })} className={inputCls} placeholder="e.g. 2.0" />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div>
+                                                        <p className={metaLabel}>Length</p>
+                                                        <input type="number" step="0.01" value={editData.length} onChange={e => setEditData({ ...editData, length: e.target.value })} className={inputCls} />
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Breadth</p>
+                                                        <input type="number" step="0.01" value={editData.breadth} onChange={e => setEditData({ ...editData, breadth: e.target.value })} className={inputCls} />
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Height</p>
+                                                        <input type="number" step="0.01" value={editData.height} onChange={e => setEditData({ ...editData, height: e.target.value })} className={inputCls} />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <p className={metaLabel}>Shape</p>
+                                                    <p className={`${metaValue} capitalize`}>{tc?.tank_shape || '—'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className={metaLabel}>Unit</p>
+                                                    <p className={metaValue}>{tc?.dimension_unit || '—'}</p>
+                                                </div>
+                                            </div>
+                                            {tc?.tank_shape === 'cylinder' ? (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <p className={metaLabel}>Radius</p>
+                                                        <p className={metaValue}>{tc?.radius ?? '—'} {tc?.dimension_unit || ''}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Height</p>
+                                                        <p className={metaValue}>{tc?.height ?? '—'} {tc?.dimension_unit || ''}</p>
+                                                    </div>
+                                                </div>
+                                            ) : tc?.tank_shape === 'rectangular' ? (
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div>
+                                                        <p className={metaLabel}>Length</p>
+                                                        <p className={metaValue}>{tc?.length ?? '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Breadth</p>
+                                                        <p className={metaValue}>{tc?.breadth ?? '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className={metaLabel}>Height</p>
+                                                        <p className={metaValue}>{tc?.height ?? '—'}</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-slate-400 italic">No tank config set</p>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Location */}
+                            <div className="border-t border-slate-100 pt-3">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Location</p>
+                            </div>
+                            {isEditing ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <p className={metaLabel}>Latitude</p>
+                                        <input type="number" step="0.000001" value={editData.lat} onChange={e => setEditData({ ...editData, lat: e.target.value })} className={inputCls} placeholder="17.448" />
+                                    </div>
+                                    <div>
+                                        <p className={metaLabel}>Longitude</p>
+                                        <input type="number" step="0.000001" value={editData.lng} onChange={e => setEditData({ ...editData, lng: e.target.value })} className={inputCls} placeholder="78.384" />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <p className={metaLabel}>Latitude</p>
+                                        <p className={`${metaValue} font-mono text-xs`}>{node.lat || '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className={metaLabel}>Longitude</p>
+                                        <p className={`${metaValue} font-mono text-xs`}>{node.lng || node.long || '—'}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

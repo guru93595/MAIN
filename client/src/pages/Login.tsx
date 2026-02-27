@@ -84,7 +84,9 @@ const Login = () => {
                 // --- LOCAL DEV BYPASS ---
                 if (import.meta.env.DEV && email === 'admin@evaratech.com' && password === 'admin123') {
                     console.log('Using local dev bypass for Superadmin.');
-                    navigate('/dashboard');
+                    // Update authentication state before redirecting
+                    await loginFn(email, password);
+                    navigate('/superadmin');
                     return;
                 }
 
@@ -134,7 +136,7 @@ const Login = () => {
                                             .single();
 
                                         if (!retryError && retryProfile && (retryProfile as any).role === 'superadmin') {
-                                            navigate('/dashboard');
+                                            navigate('/superadmin');
                                             return;
                                         }
                                     }
@@ -148,7 +150,7 @@ const Login = () => {
 
                             if (profile && (profile as any).role === 'superadmin') {
                                 console.log('User is superadmin, redirecting to dashboard...');
-                                navigate('/dashboard');
+                                navigate('/superadmin');
                             } else {
                                 await supabase.auth.signOut();
                                 setError(`Access Denied: Your role is '${(profile as any)?.role || 'unknown'}', but SuperAdmin is required.`);

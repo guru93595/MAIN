@@ -38,22 +38,22 @@ export interface Customer {
 }
 
 export const REGIONS: Region[] = [
-    { id: 'hyd', name: 'Hyderabad', code: 'HYD', stats: { communities: 12, customers: 145, activeAlerts: 2 } },
-    { id: 'blr', name: 'Bengaluru', code: 'BLR', stats: { communities: 8, customers: 98, activeAlerts: 5 } },
-    { id: 'mum', name: 'Mumbai', code: 'MUM', stats: { communities: 5, customers: 42, activeAlerts: 0 } },
-    { id: 'ngp', name: 'Nagpur', code: 'NGP', stats: { communities: 3, customers: 20, activeAlerts: 1 } },
+    { id: 'hyd', name: 'Hyderabad', code: 'HYD', stats: { communities: 0, customers: 0, activeAlerts: 0 } },
+    { id: 'blr', name: 'Bengaluru', code: 'BLR', stats: { communities: 0, customers: 0, activeAlerts: 0 } },
+    { id: 'mum', name: 'Mumbai', code: 'MUM', stats: { communities: 0, customers: 0, activeAlerts: 0 } },
+    { id: 'ngp', name: 'Nagpur', code: 'NGP', stats: { communities: 0, customers: 0, activeAlerts: 0 } },
 ];
 
 export const COMMUNITIES: Community[] = [
     // Hyderabad
-    { id: 'c1', regionId: 'hyd', name: 'Greenwood Heights', zone: 'Gachibowli', stats: { nodes: 15, health: 98 } },
-    { id: 'c2', regionId: 'hyd', name: 'Cyber Towers', zone: 'Hitech City', stats: { nodes: 22, health: 92 } },
-    { id: 'c3', regionId: 'hyd', name: 'Jubilee Enclave', zone: 'Jubilee Hills', stats: { nodes: 8, health: 100 } },
+    { id: 'c1', regionId: 'hyd', name: 'Greenwood Heights', zone: 'Gachibowli', stats: { nodes: 0, health: 0 } },
+    { id: 'c2', regionId: 'hyd', name: 'Cyber Towers', zone: 'Hitech City', stats: { nodes: 0, health: 0 } },
+    { id: 'c3', regionId: 'hyd', name: 'Jubilee Enclave', zone: 'Jubilee Hills', stats: { nodes: 0, health: 0 } },
     // Bengaluru
-    { id: 'c4', regionId: 'blr', name: 'Prestige Lakeside', zone: 'Whitefield', stats: { nodes: 30, health: 88 } },
-    { id: 'c5', regionId: 'blr', name: 'Sobha City', zone: 'Hebbal', stats: { nodes: 12, health: 95 } },
+    { id: 'c4', regionId: 'blr', name: 'Prestige Lakeside', zone: 'Whitefield', stats: { nodes: 0, health: 0 } },
+    { id: 'c5', regionId: 'blr', name: 'Sobha City', zone: 'Hebbal', stats: { nodes: 0, health: 0 } },
     // Mumbai
-    { id: 'c6', regionId: 'mum', name: 'Lodha World', zone: 'Lower Parel', stats: { nodes: 45, health: 99 } },
+    { id: 'c6', regionId: 'mum', name: 'Lodha World', zone: 'Lower Parel', stats: { nodes: 0, health: 0 } },
 ];
 
 export const CUSTOMERS: Customer[] = [

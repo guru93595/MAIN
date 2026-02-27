@@ -26,11 +26,7 @@ const Analytics = () => {
     const [timeRange, setTimeRange] = useState<'7' | '14' | '30'>('7');
     const [isLoading, setIsLoading] = useState(false);
 
-    const nodeChannelMap: Record<string, string> = {
-        'EvaraTank': '123456',
-        'EvaraFlow': '234567',
-        'EvaraDeep': '345678'
-    };
+    const nodeChannelMap: Record<string, string> = {};
 
     useEffect(() => {
         if (nodes.length > 0 && !selectedNode) {
