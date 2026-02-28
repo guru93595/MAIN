@@ -22,7 +22,8 @@ from datetime import datetime
 try:
     from app.services.telemetry import ThingSpeakTelemetryService
 except ImportError:
-    print("[WARNING] ThingSpeakTelemetryService not found, using fallback")
+    import logging
+    logging.getLogger("evara_backend").warning("ThingSpeakTelemetryService not found, using fallback")
     ThingSpeakTelemetryService = None
 
 router = APIRouter()
@@ -121,7 +122,8 @@ async def create_node(
         return node
         
     except Exception as e:
-        print(f"ERROR creating node: {e}")
+        import logging
+        logging.getLogger("evara_backend").error("ERROR creating node: %s", e)
         traceback.print_exc()
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -158,7 +160,8 @@ async def read_nodes(
             for node in nodes
         ]
     except Exception as e:
-        print(f"❌ Node list fetch error: {e}")
+        import logging
+        logging.getLogger("evara_backend").error("Node list fetch error: %s", e)
         traceback.print_exc()
         raise HTTPException(status_code=503, detail=f"Failed to fetch nodes: {str(e)}")
 

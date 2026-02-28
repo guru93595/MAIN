@@ -19,6 +19,14 @@ services:
         value: 8000
       - key: PYTHON_VERSION
         value: 3.10.12
+      - key: ENVIRONMENT
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
 
   # React Frontend
   # React Frontend
@@ -37,6 +45,10 @@ services:
           type: web
           name: evara-backend
           property: url
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
 
 databases:
   - name: evara-db

@@ -51,14 +51,15 @@ async def create_tables():
     from app.models.all_models import Base as ModelsBase
     import asyncio
     
-    # 🔗 Attempting to connect to database...
-    print("🔗 Attempting to connect to database (STRICT MODE)...")
+    import logging
+    log = logging.getLogger("evara_backend")
+    log.info("Attempting to connect to database...")
     try:
         async with engine.begin() as conn:
             await conn.run_sync(ModelsBase.metadata.create_all)
-        print("✅ Database tables created successfully")
+        log.info("Database tables created successfully")
     except Exception as e:
         if "DuplicateObjectError" in str(e) or "duplicate key value violates unique constraint" in str(e):
-            print("✅ Database tables and types already exist (Skipped recreation)")
+            log.info("Database tables already exist (skipped recreation)")
         else:
             raise e

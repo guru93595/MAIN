@@ -1,5 +1,6 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.schemas import schemas
@@ -15,6 +16,9 @@ from app.core.ratelimit import RateLimiter
 from app.services.telemetry.thingspeak import ThingSpeakTelemetryService
 from app.db.repository import NodeRepository
 import time
+import logging
+
+logger = logging.getLogger("evara_backend")
 
 # simple TTL cache: { "device_id": (timestamp, data) }
 live_telemetry_cache = {}
@@ -41,10 +45,16 @@ async def list_device_registry(
     # In real app, filter by organization permissions
     return nodes
 
+class DeviceMetadataUpdate(BaseModel):
+    """Schema for device firmware/calibration updates."""
+    firmware_version: Optional[str] = None
+    calibration_factor: Optional[float] = None
+
+
 @router.put("/{node_id}/metadata", response_model=schemas.NodeResponse)
 async def update_device_metadata(
     node_id: str,
-    metadata_in: schemas.NodeCreate, # Using Create schema as partial for now
+    metadata_in: DeviceMetadataUpdate,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(RequirePermission(Permission.DEVICE_CONTROL))
 ) -> Any:
@@ -55,10 +65,10 @@ async def update_device_metadata(
     if not node:
         raise HTTPException(status_code=404, detail="Device not found")
         
-    # Update allowed fields
-    if metadata_in.firmware_version:
+    # Update allowed fields (only if provided)
+    if metadata_in.firmware_version is not None:
         node.firmware_version = metadata_in.firmware_version
-    if metadata_in.calibration_factor:
+    if metadata_in.calibration_factor is not None:
         node.calibration_factor = metadata_in.calibration_factor
         
     await db.commit()
@@ -85,8 +95,9 @@ async def generate_provisioning_token(
     expires = datetime.utcnow() + timedelta(minutes=expiration_minutes)
     
     token_obj = models.ProvisioningToken(
+        id=str(uuid.uuid4()),
         token=token_str,
-        created_by_user_id=user_payload.get("sub"), # Supabase ID
+        created_by_user_id=user_payload.get("sub"),
         community_id=community_id,
         expires_at=expires
     )
@@ -150,7 +161,7 @@ async def claim_device(
         comm_result = await db.execute(select(models.Community).where(models.Community.id == token_obj.community_id))
         community = comm_result.scalars().first()
         if community:
-            node.organization_id = community.organization_id
+            node.organization_id = getattr(community, "organization_id", None) or community.distributor_id
             
         db.add(node)
         
@@ -273,11 +284,11 @@ async def get_device_live_data(
 
     data = await ts_service.fetch_latest(node_id, channel_configs)
     
-    print(f"ThingSpeak returned data: {data}")
+    logger.debug("ThingSpeak returned data for %s: %s", node_id, data)
     
     # If no real data available, show clear status
     if not data:
-        print("No ThingSpeak data available - showing disconnected status")
+        logger.info("No ThingSpeak data for node %s - showing disconnected status", node_id)
         return {
             "device_id": node_id,
             "timestamp": None,
@@ -291,11 +302,11 @@ async def get_device_live_data(
     # Add raw field data for debugging if no mapped distance found
     # CRITICAL: field2 = Distance, field1 = Temperature (NEVER use field1 for tank level)
     if "distance" not in data and "field2" in data:
-        print(f"[WARNING] No 'distance' field mapped. Raw field2 (Distance) value: {data.get('field2')}")
-        print(f"   Temperature (field1 - IGNORED): {data.get('field1')}")
-        print(f"   Available fields: {[k for k in data.keys() if k.startswith('field')]}")
-        print(f"   Field mapping used: {[cfg.get('field_mapping') for cfg in channel_configs]}")
-        print(f"   FIX: Update field_mapping to {{'field2': 'distance'}}")
+        logger.warning(
+            "No 'distance' field mapped for node %s. Raw field2: %s. "
+            "Update field_mapping to {'field2': 'distance'}",
+            node_id, data.get("field2")
+        )
 
     response = {
         "device_id": node_id,
