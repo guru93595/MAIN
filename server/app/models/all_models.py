@@ -46,7 +46,6 @@ class Community(Base):
     
     # Tenancy
     distributor_id: Mapped[str] = mapped_column(ForeignKey("distributors.id"), nullable=True, index=True)
-    organization_id: Mapped[str] = mapped_column(String, nullable=True, index=True)
     
     # Relationships
     distributor = relationship("Distributor", back_populates="communities")
@@ -122,12 +121,6 @@ class Node(Base):
     customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
     community_id: Mapped[str] = mapped_column(ForeignKey("communities.id"), nullable=True, index=True)
     distributor_id: Mapped[str] = mapped_column(ForeignKey("distributors.id"), nullable=True, index=True)
-    organization_id: Mapped[str] = mapped_column(String, nullable=True, index=True)
-    
-    # Device metadata (firmware, calibration, IoT shadow)
-    firmware_version: Mapped[str] = mapped_column(String, nullable=True)
-    calibration_factor: Mapped[float] = mapped_column(Float, nullable=True)
-    shadow_state: Mapped[dict] = mapped_column(JSON, nullable=True)
     
     customer = relationship("Customer", back_populates="devices")
     community = relationship("Community", back_populates="nodes")
@@ -195,18 +188,6 @@ class AuditLog(Base):
     user = relationship("User", back_populates="audit_logs")
 
 # ─── ADDITIONAL MODELS FOR COMPLETE FUNCTIONALITY ───
-
-class ProvisioningToken(Base):
-    __tablename__ = "provisioning_tokens"
-    
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    token: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
-    created_by_user_id: Mapped[str] = mapped_column(String, nullable=True)
-    community_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    is_used: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
 
 class NodeAssignment(Base):
     __tablename__ = "node_assignments"

@@ -9,14 +9,8 @@ class Settings(BaseSettings):
     # CORS
     @property
     def cors_origins(self) -> list[str]:
-        # Default origins (local + Render)
-        defaults = [
-            "http://localhost:8080",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "https://evara-dashboard.onrender.com",
-            "https://evara-frontend.onrender.com",
-        ]
+        # Default origins
+        defaults = ["http://localhost:8080", "http://localhost:5173", "https://evara-dashboard.onrender.com"]
         # Allow comma separated string from env
         env_origins = self.BACKEND_CORS_ORIGINS
         if isinstance(env_origins, str):
@@ -55,6 +49,5 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings():
     s = Settings()
-    import logging
-    logging.getLogger("evara_backend").info("SETTINGS: ENVIRONMENT=%s", s.ENVIRONMENT)
+    print(f"SETTINGS: ENVIRONMENT={s.ENVIRONMENT}")
     return s

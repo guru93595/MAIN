@@ -17,10 +17,10 @@ import asyncio
 settings = get_settings()
 app = FastAPI(title="EvaraTech Backend", version="1.0.0")
 
-# Configure CORS — restrict to known origins in production
+# Configure CORS to allow requests from the React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"], # Temporarily allowing all origins for debugging CORS issues
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,13 +68,12 @@ async def log_requests(request, call_next):
     method = request.method
     auth = request.headers.get("Authorization", "No Auth")
     
-    logger.info("INCOMING %s %s | Client IP: %s", method, path, request.client.host)
+    print(f"--> INCOMING: {method} {path} | Client IP: {request.client.host}")
     
     response = await call_next(request)
     
     process_time = (time.time() - start_time) * 1000
-    logger.info("REQUEST %s %s | Auth: %s... | Status: %d | Time: %.2fms",
-        method, path, auth[:20] if auth else "none", response.status_code, process_time)
+    print(f"REQUEST: {method} {path} | Auth: {auth[:20]}... | Status: {response.status_code} | Time: {process_time:.2f}ms")
     
     return response
 

@@ -9,7 +9,7 @@ import AdminLayout from './layouts/AdminLayout';
 // import SuperAdminOverview from './pages/SuperAdminOverview';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminCustomers from './pages/admin/AdminCustomers';
-import AdminNodes from './pages/admin/AdminNodes';
+// import AdminNodes from './pages/admin/AdminNodes';
 import AdminConfig from './pages/admin/AdminConfig';
 import RegionsOverview from './pages/admin/hierarchy/RegionsOverview';
 import RegionCustomers from './pages/admin/hierarchy/RegionCustomers';
@@ -125,7 +125,8 @@ function App() {
                                             {/* Legacy route redirects */}
                                             <Route path="communities/:communityId" element={<Navigate to="../regions" replace />} />
 
-                                            <Route path="nodes" element={<AdminNodes />} />
+                                            {/* Legacy route redirects or keep if needed */}
+                                            <Route path="nodes" element={<Navigate to="regions" replace />} />
 
                                             <Route path="config" element={<AdminConfig />} />
                                         </Route>
